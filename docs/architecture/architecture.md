@@ -24,8 +24,9 @@
 Содержит:
 - Контроллеры
 - DTO
-- Мапперы
-- OpenAPI-спецификация
+- Мапперы (MapStruct)
+- Валидация (Jakarta Validation)
+- OpenAPI-спецификация (SpringDoc)
 
 ### Integration — интеграции
 Назначение: взаимодействие с внешними системами.
@@ -34,7 +35,8 @@
 - Клиент к mock CRM
 - Клиент к mock биллингу
 - Клиент к mock справочнику клиентов
-- Обработка ошибок и retry
+- Retry (Spring Retry)
+- Обработка ошибок и fallback
 
 ### Notification — уведомления
 Назначение: уведомление участников процесса.
@@ -43,6 +45,7 @@
 - Отправка email (заглушка)
 - Отправка in-app уведомлений
 - Шаблоны уведомлений
+- Spring Events для внутренних событий
 
 ### UI — панель оператора
 Назначение: пользовательский интерфейс.
@@ -64,18 +67,19 @@
 Реализация: WireMock с синтетическими данными и документированными контрактами.
 
 ## Структура проекта
+
 ```text
 B2B-Order-Flow/
-├── core/ — ядро (домен, маршрутизация, SLA, история)
-├── api/ — REST API
-├── integration/ — интеграции с mock-сервисами
-├── notification/ — уведомления
-├── ui/ — панель оператора
-├── mocks/ — mock-сервисы
-├── infra/ — Docker, CI/CD
-├── db/ — миграции БД
-├── tests/ — тесты
-└── docs/ — документация
+├── core/              — ядро (домен, маршрутизация, SLA, история)
+├── api/               — REST API
+├── integration/       — интеграции с mock-сервисами
+├── notification/      — уведомления
+├── ui/                — панель оператора
+├── mocks/             — mock-сервисы
+├── infra/             — Docker, CI/CD
+├── db/                — миграции БД
+├── tests/             — тесты
+└── docs/              — документация
 ```
 
 ## Взаимодействие компонентов
@@ -85,26 +89,40 @@ B2B-Order-Flow/
 | UI | API | REST |
 | API | Core | Внутренние вызовы |
 | Core | Integration | Внутренние вызовы |
-| Core | Notification | RabbitMQ |
+| Core | Notification | Spring Events |
 | Integration | Mocks | REST |
-| Core | БД | JPA / Hibernate |
+| Core | БД | Spring Data JPA |
 
 ## Технологический стек
 
 | Слой | Технология |
 |---|---|
 | Язык | Java 21 |
-| Фреймворк | Spring Boot 3.x |
+| Фреймворк | Spring Boot 4.1.x |
+| Сборщик | Maven |
+| Безопасность | Spring Security + JWT (jjwt) + BCrypt |
+| Валидация | Jakarta Validation |
 | БД | PostgreSQL 16 |
 | ORM | Spring Data JPA |
 | Миграции | Flyway |
-| Брокер | RabbitMQ |
-| API | REST + OpenAPI (SpringDoc) |
-| UI | React / Vue |
+| API | REST + SpringDoc (OpenAPI) |
+| DTO | Java Records / Lombok |
+| Мапперы | MapStruct |
+| Интеграции | RestTemplate / WebClient |
+| Retry интеграций | Spring Retry |
+| Уведомления | Spring Events |
+| SLA | Spring `@Scheduled` + `Clock` |
+| UI | React |
 | Mock | WireMock |
 | Тесты | JUnit 5 + Testcontainers |
+| Покрытие | JaCoCo |
+| Мониторинг | Spring Actuator |
+| Логи | SLF4J + Logback |
 | Контейнеры | Docker + Docker Compose |
 | CI/CD | GitHub Actions |
+| Сервер | VPS на 2 месяца |
+| `.gitattributes` | LF |
+| Репозиторий | Public |
 
 ## API Gateway
 
@@ -123,7 +141,7 @@ B2B-Order-Flow/
 
 Обработка ошибок:
 - Таймаут
-- Retry
+- Retry (Spring Retry)
 - Fallback
 
 ## Ограничения
