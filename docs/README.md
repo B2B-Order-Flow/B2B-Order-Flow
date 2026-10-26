@@ -12,6 +12,7 @@
 ### О проекте
 - [ТЗ](tz.md)
 - [Границы проекта](scope.md)
+- [Покрытие ТЗ](tz-coverage.md)
 - [Команда](team.md)
 
 ### Бизнес-анализ
@@ -26,13 +27,20 @@
 - [Статусная модель](system/status-model.md)
 - [Правила маршрутизации](system/routing-rules.md)
 - [SLA](system/sla.md)
+- [Контракт API](system/api-contract.md)
 - [Интеграции](system/integrations.md)
 - [Уведомления](system/notifications.md)
+- [Архив и экспорт](system/archive-export.md)
+- [Нефункциональные требования](system/nfr.md)
 
 ### Архитектура
 - [Архитектура](architecture/architecture.md)
+- [Системный проект](architecture/system-design.md)
 - [Логирование](architecture/logging.md)
-- [ADR 001](architecture/adr/001-architecture.md)
 
 ### QA
 - [QA-стратегия](qa/qa-strategy.md)
+
+## Состояние
+
+Незаполненные документы: `business/ui-requirements.md`, `system/notifications.md`, `architecture/logging.md`, `qa/qa-strategy.md`. Кто за что отвечает — [team.md](team.md), раздел «Владельцы документов системной аналитики»; что это значит для покрытия ТЗ — [tz-coverage.md](tz-coverage.md), раздел 5.
