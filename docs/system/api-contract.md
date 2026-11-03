@@ -6,7 +6,7 @@
 
 Основа: [architecture.md](../architecture/architecture.md) (разделы 2, 5, 6), [status-model.md](status-model.md), [domain-model.md](domain-model.md), [routing-rules.md](routing-rules.md), [sla.md](sla.md).
 
-**Подход contract-first.** Единственный источник истины — файл `core-service/src/main/resources/openapi/core-api.yaml` (внутренний контракт) и `bff-gateway/openapi/external-api.yaml` (внешний). Модели для BFF генерируются из внутреннего контракта, а не пишутся заново. Контракт меняется только через pull request с аппрувом Дениса и Кирилла (CODEOWNERS).
+**Подход contract-first.** Единственный источник истины — файл `core-service/src/main/resources/openapi/core-api.yaml` (внутренний контракт) и `bff-gateway/openapi/external-api.yaml` (внешний). Модели для BFF генерируются из внутреннего контракта, а не пишутся заново. Контракт меняется только через pull request с обязательным аппрувом по правилам CODEOWNERS.
 
 ## 2. Соглашения
 
@@ -109,7 +109,8 @@ GET /api/v1/requests?page=0&size=20&sort=createdAt,desc&status=IN_APPROVAL&compa
 | `PAUSE_REASON_INVALID` | 422 | Причина паузы вне справочника | 10.1 процесса |
 | `EXTERNAL_SYSTEM_UNAVAILABLE` | 200 | Не ошибка запроса: заявка остаётся в `DATA_CHECK` с флагом | EC-10 |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | Тот же ключ с другим телом запроса | — |
-| `EXPORT_LIMIT_EXCEEDED` | 429 | Превышен лимит экспорта | [archive-export.md](archive-export.md) |
+| `EXPORT_TOO_LARGE` | 422 | В выборку попало больше 50 000 строк: нужно сузить фильтры |
+| `EXPORT_IN_PROGRESS` | 429 | У пользователя уже выполняется экспорт | [archive-export.md](archive-export.md) |
 | `CORE_UNAVAILABLE` | 503 | BFF не получил ответ от ядра | `retryable: true` |
 | `CORE_TIMEOUT` | 504 | Истёк таймаут ожидания ядра | `retryable: true` |
 
@@ -251,6 +252,7 @@ POST /api/v1/stages/{id}/decision
 | `DELETE /requests/{id}` | КЛ | — | Удалить неотправленный черновик |
 | `POST /requests/{id}/submit` | КЛ | T01 | Отправить оператору |
 | `POST /requests/{id}/recheck-data` | КООРД | T02, T03 | Повторная проверка во внешних системах (EC-10) |
+| `POST /requests/{id}/claim` | МП | T03b | Взять заявку из очереди менеджеров |
 | `POST /requests/{id}/commercial-terms` | МП | T04 | Зафиксировать тариф, скидку, тип договора и отправить в работу |
 | `POST /requests/{id}/resubmit` | МП | T10 | Отправить повторно после доработки |
 | `POST /requests/{id}/from-rejected` | КЛ | — | Новая заявка на основе отклонённой (`parentRequestId`) |
@@ -279,6 +281,7 @@ POST /api/v1/stages/{id}/decision
 | `POST /stages/{id}/claim` | исполнители | — | Взять этап в работу |
 | `POST /stages/{id}/assign` | КООРД | — | Назначить или переназначить исполнителя |
 | `POST /stages/{id}/tech-result` | ТС | T05, T06, T07, T15b | Результат ТВ: `AVAILABLE`, `WITH_CONSTRUCTION` (CAPEX, срок), `NONE` (причина) |
+| `POST /stages/{id}/return` | ТС | T09b | Вернуть заявку менеджеру на доработку с этапа проверки ТВ |
 | `POST /stages/{id}/decision` | ЮР, ФК, ЗК, РУК | T08, T09, T11 | `APPROVE`, `RETURN`, `REJECT` (комментарий обязателен для двух последних) |
 | `POST /stages/{id}/complete` | ИНЖ | — | Стройка, монтаж, устранение замечаний выполнены |
 | `POST /stages/{id}/activate` | ИНЖ | T16 | Тест пройден, услуга активирована |

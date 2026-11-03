@@ -18,7 +18,7 @@ graph TD
     %% Наша система
     subgraph B2B_Order_Flow [Контур B2B Order Flow]
         Nginx[Reverse Proxy / Nginx]
-        BFF[BFF - FastAPI - Stateless]
+        BFF[BFF - FastAPI - без БД]
         CORE[Транзакционное Ядро - Java 21 / Spring Boot]
     end
 
@@ -45,7 +45,7 @@ graph TD
 
 ## 2. Детализация компонентной архитектуры (Containers)
 
-BFF не имеет собственной БД (stateless) и выступает как API-шлюз и WebSocket-хаб. Все данные хранятся в единой БД ядра.
+BFF не имеет собственной БД и выступает как API-шлюз и WebSocket-хаб. Все данные хранятся в единой БД ядра. Состояние у BFF всё же есть — живые WebSocket-соединения в памяти процесса, — поэтому в MVP он работает одним экземпляром, а при горизонтальном масштабировании понадобится общий pub/sub.
 
 ```mermaid
 graph LR
@@ -55,7 +55,7 @@ graph LR
 
     subgraph Gateway_Layer [Gateway Contour]
         Nginx[Nginx / TLS]
-        FastAPI[FastAPI BFF - Stateless]
+        FastAPI[FastAPI BFF - без БД]
         Nginx --> FastAPI
     end
 

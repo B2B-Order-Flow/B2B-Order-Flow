@@ -2,7 +2,7 @@
 
 ## 1. Назначение
 
-Документ описывает сущности системы и их ключевые поля. Это вход для миграций Flyway (`core_db`), DTO в BFF и экранов интерфейса. Названия — рабочие; финальные согласуются с Кириллом и Денисом.
+Документ описывает сущности системы и их ключевые поля. Это вход для миграций Flyway (`core_db`), DTO в BFF и экранов интерфейса. Названия — рабочие; финальные закрепляются миграциями и контрактом API.
 
 Основа: [roles.md](../business/roles.md), [business-process.md](../business/business-process.md), [status-model.md](status-model.md), [routing-rules.md](routing-rules.md).
 
@@ -78,6 +78,7 @@ erDiagram
 | Выбранное предложение | `selected_offer_id` | Ссылка на `service_offer` |
 | Договор | `contract_number`, `contract_sent_at`, `contract_concluded_at` | |
 | События уровней | `work_started_at`, `activated_at`, `act_sent_at`, `closed_at`, `accepted_by_default` | Из них вычисляется уровень обязательств |
+| Поиск | `search_vector` | Генерируемая колонка `tsvector` (русская конфигурация) для полнотекстового поиска по номеру, адресу, названию компании и видимым комментариям; индекс GIN, обновляется триггером ([archive-export.md](archive-export.md), 4.1) |
 | Служебное | `submitted_at`, `created_at`, `deleted_at` | `deleted_at` только для неотправленных черновиков |
 
 **`service_offer`** — коммерческие условия заявки. В MVP у каждой заявки ровно одно предложение, оно выбирается автоматически; схема допускает несколько (клиент выбирает один из вариантов, остальные остаются для аналитики).
@@ -117,7 +118,7 @@ erDiagram
 | `status` | `QUEUED` / `IN_PROGRESS` / `DONE` / `RETURNED` / `REJECTED` / `SUPERSEDED` / `CANCELLED` |
 | `queue_role` | Роль очереди |
 | `assignee_id` | Исполнитель (после взятия или назначения координатором) |
-| `required_by_rules` | `text[]` — ID правил, из-за которых этап создан (например, `{R-03,R-05}`) |
+| `required_by_rules` | `text[]` — ID правил, из-за которых этап создан (например, `{R-01,R-03}`) |
 | `created_at`, `taken_at`, `finished_at` | |
 
 Уникальность: один неснятый этап вида `type` на `(request_id, route_version)`. Ограничение разделения обязанностей (EC-18): `assignee_id` не равен `request.manager_id` для этапов согласования; проверяется в сервисе и дублируется проверкой в БД.
@@ -135,7 +136,7 @@ erDiagram
 
 ### 4.4. SLA
 
-**`sla_timer`** — таймер срока: `id`, `request_id`, `kind` (`STAGE_SLA` — норматив этапа; `DATA_CHECK_CONTROL` — контрольный срок проверки данных; `TV_CONTROL` — контрольный срок ТВ; `ACCEPTANCE` — срок приёмки; `CANCEL_RESPONSE` — ответ на запрос об отмене), `stage_id` (только для `STAGE_SLA`, иначе пусто), `norm_minutes`, `status` (`RUNNING` / `PAUSED` / `STOPPED`), `started_at`, `elapsed_sla_seconds` (время без пауз), `next_event_at` (индексируется: предупреждение или нарушение), `warned_at`, `breached_at`, `escalation_level`. Планировщик `@Scheduled` + `Clock` выбирает таймеры по `next_event_at`.
+**`sla_timer`** — таймер срока: `id`, `request_id`, `kind` (`STAGE_SLA` — норматив этапа; `DATA_CHECK_CONTROL` — контрольный срок проверки данных; `MANAGER_ASSIGN_CONTROL` — контрольный срок назначения менеджера; `TV_CONTROL` — контрольный срок ТВ; `ACCEPTANCE` — срок приёмки; `CANCEL_RESPONSE` — ответ на запрос об отмене), `stage_id` (только для `STAGE_SLA`, иначе пусто), `norm_minutes`, `status` (`RUNNING` / `PAUSED` / `STOPPED`), `started_at`, `elapsed_sla_seconds` (время без пауз), `next_event_at` (индексируется: предупреждение или нарушение), `warned_at`, `breached_at`, `escalation_level`. Планировщик `@Scheduled` + `Clock` выбирает таймеры по `next_event_at`.
 
 **`sla_pause`** — журнал пауз: `id`, `timer_id`, `reason_code`, `set_by` (пользователь или `SYSTEM`), `comment`, `started_at`, `ended_at`, `limit_at` (предельный срок), `extended_count`, `extended_by`. В карточке показываются два времени: по SLA и календарное.
 

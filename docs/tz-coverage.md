@@ -6,31 +6,31 @@
 
 Состояние: **✅ готово**, **🟡 частично**, **⬜ не начато**. Отдельно для аналитики (описано) и реализации (работает в коде).
 
-Обновляется при каждом закрытии задачи. Владелец — Дима.
+Обновляется при каждом закрытии задачи.
 
 ## 2. Задачи ТЗ (19)
 
 | № | Задача | Где описано | Где реализуется | Аналитика | Реализация | Кто |
 |---|---|---|---|---|---|---|
-| 1 | Изучить бизнес-сценарий и описать процесс от создания до исполнения | [business-process.md](business/business-process.md), [research-b2b.md](business/research-b2b.md) | — | ✅ | — | Егор, Дима |
-| 2 | Определить роли участников и зоны ответственности | [roles.md](business/roles.md) | Identity & Access | ✅ | ⬜ | Егор, Дима |
-| 3 | Спроектировать доменную и статусную модель | [domain-model.md](system/domain-model.md), [status-model.md](system/status-model.md) | Ядро: сущности, FSM | ✅ | ⬜ | Дима, Кирилл |
-| 4 | Определить правила формирования маршрута | [routing-rules.md](system/routing-rules.md) | Ядро: FSM Router | ✅ | ⬜ | Дима, Кирилл |
-| 5 | Предусмотреть несколько сценариев обработки | [scenarios.md](business/scenarios.md) (SC-01…SC-03) | E2E-тесты | ✅ | ⬜ | Егор, Салават |
-| 6 | Спроектировать механизм согласования между подразделениями | [business-process.md](business/business-process.md) §7, [status-model.md](system/status-model.md) | Ядро: Approval Engine | ✅ | ⬜ | Дима, Кирилл |
-| 7 | Выбрать архитектурный подход и обосновать выделение компонентов | [architecture.md](architecture/architecture.md), [system-design.md](architecture/system-design.md) | — | ✅ | — | Дима |
-| 8 | Реализовать основные компоненты системы | [system-design.md](architecture/system-design.md) §3 | `core-service`, `bff-gateway`, `ui` | ✅ | ⬜ | Кирилл, Денис, Егор |
-| 9 | Реализовать единую точку взаимодействия (API Gateway) | [architecture.md](architecture/architecture.md) §2, [api-contract.md](system/api-contract.md) | Nginx + `bff-gateway` | ✅ | ⬜ | Денис, Салават |
-| 10 | Реализовать взаимодействие с mock-сервисами | [integrations.md](system/integrations.md) | Ядро: Integration Gateway, `mocks/` | ✅ | ⬜ | Кирилл, Салават |
-| 11 | Реализовать контроль SLA для отдельных этапов | [sla.md](system/sla.md) | Ядро: SLA Monitor | ✅ | ⬜ | Дима, Кирилл |
-| 12 | Реализовать уведомления участников | `system/notifications.md`, [api-contract.md](system/api-contract.md) §7 | Ядро: Notification Publisher; BFF: WebSocket | 🟡 типы событий есть, матрица получателей нет | ⬜ | Дима, Денис |
-| 13 | Реализовать историю изменений заявки и действий | [domain-model.md](system/domain-model.md) §4.7, [status-model.md](system/status-model.md) | Ядро: Audit & History | ✅ | ⬜ | Дима, Кирилл |
-| 14 | Разработать веб-панель оператора или другой интерфейс | `business/ui-requirements.md` | `ui` | ⬜ | ⬜ | Егор |
-| 15 | Описать API и контракты взаимодействия | [api-contract.md](system/api-contract.md), [integrations.md](system/integrations.md) | OpenAPI-файлы в репозитории | ✅ описано, схемы не написаны | ⬜ | Денис, Кирилл |
-| 16 | Настроить логирование и базовую обработку ошибок | `architecture/logging.md`, [api-contract.md](system/api-contract.md) §3 | Logback, обработчики ошибок | 🟡 формат ошибок есть, логирование нет | ⬜ | Салават, Денис |
-| 17 | Покрыть ключевые бизнес-сценарии автотестами | `qa/qa-strategy.md`, [sla.md](system/sla.md) §12, [integrations.md](system/integrations.md) §9 | JUnit, Testcontainers, Playwright, pytest | 🟡 тесты перечислены по темам, общей стратегии нет | ⬜ | Салават |
-| 18 | Подготовить README и инструкцию по запуску | `README.md` (корень) | — | ⬜ | ⬜ | Салават |
-| 19 | Подготовить и провести демонстрацию сквозного сценария | [scenarios.md](business/scenarios.md) §10 | Сид демо-данных | ✅ сценарий есть | ⬜ | Дима, все |
+| 1 | Изучить бизнес-сценарий и описать процесс от создания до исполнения | [business-process.md](business/business-process.md), [research-b2b.md](business/research-b2b.md) | — | ✅ | — | бизнес-аналитик, руководитель |
+| 2 | Определить роли участников и зоны ответственности | [roles.md](business/roles.md) | Identity & Access | ✅ | ⬜ | бизнес-аналитик, руководитель |
+| 3 | Спроектировать доменную и статусную модель | [domain-model.md](system/domain-model.md), [status-model.md](system/status-model.md) | Ядро: сущности, FSM | ✅ | ⬜ | руководитель, разработчик ядра |
+| 4 | Определить правила формирования маршрута | [routing-rules.md](system/routing-rules.md) | Ядро: FSM Router | ✅ | ⬜ | руководитель, разработчик ядра |
+| 5 | Предусмотреть несколько сценариев обработки | [scenarios.md](business/scenarios.md) (SC-01…SC-03) | E2E-тесты | ✅ | ⬜ | бизнес-аналитик, QA |
+| 6 | Спроектировать механизм согласования между подразделениями | [business-process.md](business/business-process.md) §7, [status-model.md](system/status-model.md) | Ядро: Approval Engine | ✅ | ⬜ | руководитель, разработчик ядра |
+| 7 | Выбрать архитектурный подход и обосновать выделение компонентов | [architecture.md](architecture/architecture.md), [system-design.md](architecture/system-design.md) | — | ✅ | — | руководитель |
+| 8 | Реализовать основные компоненты системы | [system-design.md](architecture/system-design.md) §3 | `core-service`, `bff-gateway`, `ui` | ✅ | ⬜ | разработчик ядра, разработчик API, фронтенд |
+| 9 | Реализовать единую точку взаимодействия (API Gateway) | [architecture.md](architecture/architecture.md) §2, [api-contract.md](system/api-contract.md) | Nginx + `bff-gateway` | ✅ | ⬜ | разработчик API, DevOps и QA |
+| 10 | Реализовать взаимодействие с mock-сервисами | [integrations.md](system/integrations.md) | Ядро: Integration Gateway, `mocks/` | ✅ | ⬜ | разработчик ядра, DevOps |
+| 11 | Реализовать контроль SLA для отдельных этапов | [sla.md](system/sla.md) | Ядро: SLA Monitor | ✅ | ⬜ | руководитель, разработчик ядра |
+| 12 | Реализовать уведомления участников | `system/notifications.md`, [api-contract.md](system/api-contract.md) §7 | Ядро: Notification Publisher; BFF: WebSocket | 🟡 типы событий есть, матрица получателей нет | ⬜ | руководитель, разработчик API |
+| 13 | Реализовать историю изменений заявки и действий | [domain-model.md](system/domain-model.md) §4.7, [status-model.md](system/status-model.md) | Ядро: Audit & History | ✅ | ⬜ | руководитель, разработчик ядра |
+| 14 | Разработать веб-панель оператора или другой интерфейс | `business/ui-requirements.md` | `ui` | ⬜ | ⬜ | бизнес-аналитик |
+| 15 | Описать API и контракты взаимодействия | [api-contract.md](system/api-contract.md), [integrations.md](system/integrations.md) | OpenAPI-файлы в репозитории | ✅ описано, схемы не написаны | ⬜ | разработчик API, разработчик ядра |
+| 16 | Настроить логирование и базовую обработку ошибок | `architecture/logging.md`, [api-contract.md](system/api-contract.md) §3 | Logback, обработчики ошибок | 🟡 формат ошибок есть, логирование нет | ⬜ | DevOps, разработчик API |
+| 17 | Покрыть ключевые бизнес-сценарии автотестами | `qa/qa-strategy.md`, [sla.md](system/sla.md) §12, [integrations.md](system/integrations.md) §9 | JUnit, Testcontainers, Playwright, pytest | 🟡 тесты перечислены по темам, общей стратегии нет | ⬜ | DevOps и QA |
+| 18 | Подготовить README и инструкцию по запуску | `README.md` (корень) | — | ⬜ | ⬜ | DevOps и QA |
+| 19 | Подготовить и провести демонстрацию сквозного сценария | [scenarios.md](business/scenarios.md) §10 | Сид демо-данных | ✅ сценарий есть | ⬜ | руководитель и вся команда |
 
 ## 3. Критерии приёмки (14)
 
@@ -38,8 +38,8 @@
 |---|---|---|
 | Описан конкретный бизнес-сценарий обработки заявки | [business-process.md](business/business-process.md), [scenarios.md](business/scenarios.md) | ✅ |
 | Определены роли участников и зоны ответственности | [roles.md](business/roles.md), матрица действий и RACI | ✅ |
-| Разработана статусная модель и логика переходов | [status-model.md](system/status-model.md): 13 статусов, 22 перехода | ✅ |
-| Реализован механизм маршрутизации и согласования по параметрам | [routing-rules.md](system/routing-rules.md): R-01…R-09 | описано, код ⬜ |
+| Разработана статусная модель и логика переходов | [status-model.md](system/status-model.md): 13 статусов, 26 переходов | ✅ |
+| Реализован механизм маршрутизации и согласования по параметрам | [routing-rules.md](system/routing-rules.md): R-01…R-08 | описано, код ⬜ |
 | Предусмотрены варианты маршрута для стандартных и нестандартных заявок | SC-01…SC-03, EC-03, EC-04 | описано, код ⬜ |
 | Реализован контроль SLA и уведомления о сроках | [sla.md](system/sla.md) | описано, код ⬜ |
 | Сохраняется история изменений и прохождения по этапам | `audit_log`, `request_revision` | описано, код ⬜ |
@@ -70,10 +70,10 @@
 
 | Пробел | Последствие | Кто |
 |---|---|---|
-| `business/ui-requirements.md` пуст | Задача 14 и критерий по интерфейсу без описания; фронтенд строится по наитию | Егор |
-| `qa/qa-strategy.md` пуст | Задача 17 и критерий по тестам; перечни тестов разбросаны по трём документам | Салават |
-| `architecture/logging.md` пуст | Задача 16 и критерий по логированию закрыты только наполовину | Салават |
-| `system/notifications.md` пуст | Задача 12: типы событий есть, матрица «кто получает» нет | Дима |
-| Корневой `README.md` пуст | Задача 18 и отдельный критерий приёмки | Салават |
-| OpenAPI-схемы не написаны | Задача 15 закрыта документом, но не артефактом поставки | Денис, Кирилл |
-| Нет плана по вехам и датам | Срок 3 месяца, контрольных точек нет | Дима |
+| `business/ui-requirements.md` пуст | Задача 14 и критерий по интерфейсу без описания; фронтенд строится по наитию | бизнес-аналитик |
+| `qa/qa-strategy.md` пуст | Задача 17 и критерий по тестам; перечни тестов разбросаны по трём документам | DevOps и QA |
+| `architecture/logging.md` пуст | Задача 16 и критерий по логированию закрыты только наполовину | DevOps и QA |
+| `system/notifications.md` пуст | Задача 12: типы событий есть, матрица «кто получает» нет | руководитель |
+| Корневой `README.md` пуст | Задача 18 и отдельный критерий приёмки | DevOps и QA |
+| OpenAPI-схемы не написаны | Задача 15 закрыта документом, но не артефактом поставки | разработчик API, разработчик ядра |
+| Нет плана по вехам и датам | Срок 3 месяца, контрольных точек нет | руководитель |
