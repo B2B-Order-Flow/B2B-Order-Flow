@@ -204,7 +204,36 @@
       }
     },
     {
-      "name": "Справочник ООО «Сбой временный» (повторы)",
+      "name": "Справочник ООО «Медленный» (медленный ответ)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000052"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999000052",
+          "kpp": "999901001",
+          "ogrn": "1029999000052",
+          "name": "ООО «Медленный»",
+          "legalAddress": "101000, г. Москва, ул. Мясницкая, д. 7",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Шаткий» (повторы)",
       "priority": 1,
       "request": {
         "method": "GET",
@@ -221,7 +250,7 @@
           "inn": "9999000013",
           "kpp": "999901001",
           "ogrn": "1029999000019",
-          "name": "ООО «Сбой временный»",
+          "name": "ООО «Шаткий»",
           "legalAddress": "101000, г. Москва, ул. Мясницкая, д. 3",
           "status": "ACTIVE",
           "isGovCustomer": false
@@ -233,7 +262,7 @@
       }
     },
     {
-      "name": "Справочник ООО «Сбой постоянный» (EC-10)",
+      "name": "Справочник ООО «Глухой» (EC-10)",
       "priority": 1,
       "request": {
         "method": "GET",
@@ -250,7 +279,7 @@
           "inn": "9999000020",
           "kpp": "999901001",
           "ogrn": "1029999000020",
-          "name": "ООО «Сбой постоянный»",
+          "name": "ООО «Глухой»",
           "legalAddress": "101000, г. Москва, ул. Мясницкая, д. 5",
           "status": "ACTIVE",
           "isGovCustomer": false

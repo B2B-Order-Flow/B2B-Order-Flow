@@ -66,7 +66,7 @@
         "status": 200,
         "jsonBody": {
           "inn": "9999000013",
-          "name": "ООО «Сбой временный»",
+          "name": "ООО «Шаткий»",
           "segment": "SMB",
           "assignedManagerLogin": "a.smirnova",
           "updatedAt": "2026-10-01T09:00:00Z"

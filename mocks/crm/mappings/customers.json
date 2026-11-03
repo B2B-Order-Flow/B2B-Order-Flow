@@ -189,6 +189,34 @@
         },
         "fixedDelayMilliseconds": 30000
       }
+    },
+    {
+      "name": "CRM ООО «Медленный» (медленный ответ)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000052"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999000052",
+          "name": "ООО «Медленный»",
+          "segment": "SMB",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        },
+        "fixedDelayMilliseconds": 1500
+      }
     }
   ]
 }
