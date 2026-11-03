@@ -27,9 +27,9 @@
 | 13 | Реализовать историю изменений заявки и действий | [domain-model.md](system/domain-model.md) §4.7, [status-model.md](system/status-model.md) | Ядро: Audit & History | ✅ | ⬜ | руководитель, разработчик ядра |
 | 14 | Разработать веб-панель оператора или другой интерфейс | `business/ui-requirements.md` | `ui` | ⬜ | ⬜ | бизнес-аналитик |
 | 15 | Описать API и контракты взаимодействия | [api-contract.md](system/api-contract.md), [integrations.md](system/integrations.md) | OpenAPI-файлы в репозитории | ✅ описано, схемы не написаны | ⬜ | разработчик API, разработчик ядра |
-| 16 | Настроить логирование и базовую обработку ошибок | `architecture/logging.md`, [api-contract.md](system/api-contract.md) §3 | Logback, обработчики ошибок | 🟡 формат ошибок есть, логирование нет | ⬜ | DevOps, разработчик API |
-| 17 | Покрыть ключевые бизнес-сценарии автотестами | `qa/qa-strategy.md`, [sla.md](system/sla.md) §12, [integrations.md](system/integrations.md) §9 | JUnit, Testcontainers, Playwright, pytest | 🟡 тесты перечислены по темам, общей стратегии нет | ⬜ | DevOps и QA |
-| 18 | Подготовить README и инструкцию по запуску | `README.md` (корень) | — | ⬜ | ⬜ | DevOps и QA |
+| 16 | Настроить логирование и базовую обработку ошибок | `architecture/logging.md`, [api-contract.md](system/api-contract.md) §3 | Logback, обработчики ошибок | ✅ формат ошибок и логирование описаны | ⬜ | DevOps, разработчик API |
+| 17 | Покрыть ключевые бизнес-сценарии автотестами | `qa/qa-strategy.md`, [sla.md](system/sla.md) §11, [integrations.md](system/integrations.md) §9 | JUnit, Testcontainers, Playwright, pytest | ✅ стратегия тестирования описана | ⬜ | DevOps и QA |
+| 18 | Подготовить README и инструкцию по запуску | `README.md` (корень, ветка `dev`) | — | 🟡 есть в `dev`, проверить после слияния | ⬜ | DevOps и QA |
 | 19 | Подготовить и провести демонстрацию сквозного сценария | [scenarios.md](business/scenarios.md) §10 | Сид демо-данных | ✅ сценарий есть | ⬜ | руководитель и вся команда |
 
 ## 3. Критерии приёмки (14)
@@ -45,9 +45,9 @@
 | Сохраняется история изменений и прохождения по этапам | `audit_log`, `request_revision` | описано, код ⬜ |
 | Реализовано взаимодействие с mock-сервисами | [integrations.md](system/integrations.md): три системы | описано, код ⬜ |
 | Обоснованы архитектурный подход и технические решения | [architecture.md](architecture/architecture.md), [system-design.md](architecture/system-design.md) | ✅ |
-| Реализована базовая обработка ошибок и логирование | [api-contract.md](system/api-contract.md) §3; `logging.md` пуст | 🟡 |
-| Предусмотрены автотесты ключевых сценариев | `qa/qa-strategy.md` пуст; перечни тестов есть в трёх документах | 🟡 |
-| Подготовлены README и инструкция по запуску | Корневой `README.md` пуст | ⬜ |
+| Реализована базовая обработка ошибок и логирование | [api-contract.md](system/api-contract.md) §3, [logging.md](architecture/logging.md) | описано, код ⬜ |
+| Предусмотрены автотесты ключевых сценариев | [qa-strategy.md](qa/qa-strategy.md) | описано, код ⬜ |
+| Подготовлены README и инструкция по запуску | Корневой `README.md` написан в ветке `dev` | 🟡 |
 | Система запускается на собственной инфраструктуре | `infra/`: Docker Compose, Nginx | ⬜ |
 | Проведена публичная защита с демонстрацией сквозного сценария | [scenarios.md](business/scenarios.md) §10 | ⬜ |
 
@@ -71,9 +71,6 @@
 | Пробел | Последствие | Кто |
 |---|---|---|
 | `business/ui-requirements.md` пуст | Задача 14 и критерий по интерфейсу без описания; фронтенд строится по наитию | бизнес-аналитик |
-| `qa/qa-strategy.md` пуст | Задача 17 и критерий по тестам; перечни тестов разбросаны по трём документам | DevOps и QA |
-| `architecture/logging.md` пуст | Задача 16 и критерий по логированию закрыты только наполовину | DevOps и QA |
 | `system/notifications.md` пуст | Задача 12: типы событий есть, матрица «кто получает» нет | руководитель |
-| Корневой `README.md` пуст | Задача 18 и отдельный критерий приёмки | DevOps и QA |
 | OpenAPI-схемы не написаны | Задача 15 закрыта документом, но не артефактом поставки | разработчик API, разработчик ядра |
 | Нет плана по вехам и датам | Срок 3 месяца, контрольных точек нет | руководитель |

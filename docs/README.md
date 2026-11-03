@@ -14,6 +14,7 @@
 - [Границы проекта](scope.md)
 - [Покрытие ТЗ](tz-coverage.md)
 - [Команда](team.md)
+- [План недели 1](plan-week1.md)
 
 ### Бизнес-анализ
 - [Исследование рынка B2B](business/research-b2b.md)
@@ -43,4 +44,4 @@
 
 ## Состояние
 
-Незаполненные документы: `business/ui-requirements.md`, `system/notifications.md`, `architecture/logging.md`, `qa/qa-strategy.md`. Кто за что отвечает — [team.md](team.md), раздел «Владельцы документов системной аналитики»; что это значит для покрытия ТЗ — [tz-coverage.md](tz-coverage.md), раздел 5.
+Незаполненные документы: `business/ui-requirements.md`, `system/notifications.md`. Кто за что отвечает — [team.md](team.md), раздел «Владельцы документов системной аналитики»; что это значит для покрытия ТЗ — [tz-coverage.md](tz-coverage.md), раздел 5.

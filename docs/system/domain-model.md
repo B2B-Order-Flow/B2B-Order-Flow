@@ -204,7 +204,7 @@ erDiagram
 - `company(inn)` уникален для активных;
 - `request(company_id, status)`, `request(manager_id, status)`, `request(parent_request_id)`;
 - `request_stage(queue_role, status)` — очереди; `request_stage(assignee_id, status)` — «мои задачи»;
-- `sla_timer(next_event_at) WHERE status = 'RUNNING'`;
+- `sla_timer(next_event_at) WHERE status IN ('RUNNING', 'PAUSED')`;
 - `audit_log(request_id, created_at)`, `audit_log(company_id, created_at)`;
 - `cancellation_request(request_id) WHERE status = 'OPEN'` уникален;
 - `service_offer(request_id) WHERE status = 'SELECTED'` уникален;
