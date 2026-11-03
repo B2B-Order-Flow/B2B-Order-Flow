@@ -1,0 +1,194 @@
+{
+  "mappings": [
+    {
+      "name": "CRM ИП Соколов А. В. (SC-01)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "770112345127"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "770112345127",
+          "name": "ИП Соколов А. В.",
+          "segment": "SMB",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM ООО «Логистик Плюс» (SC-02)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7725012341"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7725012341",
+          "name": "ООО «Логистик Плюс»",
+          "segment": "LARGE",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM АО «Агрохолдинг Заря» (SC-03, EC-19)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "5050123455"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "5050123455",
+          "name": "АО «Агрохолдинг Заря»",
+          "segment": "STRATEGIC",
+          "assignedManagerLogin": null,
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM ООО «Вектор» (SC-00)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7811001128"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7811001128",
+          "name": "ООО «Вектор»",
+          "segment": "SMB",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM ООО «Северторг» (EC-03)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7844002230"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7844002230",
+          "name": "ООО «Северторг»",
+          "segment": "SMB",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM ГБУ «Городская больница № 7» (R-02)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7719003349"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7719003349",
+          "name": "ГБУ «Городская больница № 7»",
+          "segment": "LARGE",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM ООО «Таймаут» (EC-10)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999005565"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999005565",
+          "name": "ООО «Таймаут»",
+          "segment": "SMB",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        },
+        "fixedDelayMilliseconds": 30000
+      }
+    }
+  ]
+}

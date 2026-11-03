@@ -1,0 +1,9 @@
+{
+  "type": "https://b2b-order-flow/errors/service-unavailable",
+  "title": "Сервис недоступен",
+  "status": 503,
+  "detail": "Mock CRM: управляемый сбой",
+  "code": "SERVICE_UNAVAILABLE",
+  "correlationId": "{{request.headers.X-Correlation-Id}}",
+  "retryable": true
+}

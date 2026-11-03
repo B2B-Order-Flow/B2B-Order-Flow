@@ -1,0 +1,9 @@
+{
+  "type": "https://b2b-order-flow/errors/not-found",
+  "title": "Лицевой счёт не найден",
+  "status": 404,
+  "detail": "Лицевой счёт с таким ИНН не найден в биллинге",
+  "code": "NOT_FOUND",
+  "correlationId": "{{request.headers.X-Correlation-Id}}",
+  "retryable": false
+}

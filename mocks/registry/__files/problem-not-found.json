@@ -1,0 +1,9 @@
+{
+  "type": "https://b2b-order-flow/errors/not-found",
+  "title": "Организация не найдена",
+  "status": 404,
+  "detail": "Организация с таким ИНН не найдена в справочнике клиентов",
+  "code": "NOT_FOUND",
+  "correlationId": "{{request.headers.X-Correlation-Id}}",
+  "retryable": false
+}

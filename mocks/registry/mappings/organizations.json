@@ -1,0 +1,265 @@
+{
+  "mappings": [
+    {
+      "name": "Справочник ИП Соколов А. В. (SC-01)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "770112345127"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "770112345127",
+          "kpp": null,
+          "ogrn": "304777701123450",
+          "name": "ИП Соколов А. В.",
+          "legalAddress": "620014, г. Екатеринбург, ул. Вайнера, д. 9",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Логистик Плюс» (SC-02)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7725012341"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7725012341",
+          "kpp": "772501001",
+          "ogrn": "1027725012347",
+          "name": "ООО «Логистик Плюс»",
+          "legalAddress": "115280, г. Москва, ул. Автозаводская, д. 17",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник АО «Агрохолдинг Заря» (SC-03, EC-19)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "5050123455"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "5050123455",
+          "kpp": "505001001",
+          "ogrn": "1025050123450",
+          "name": "АО «Агрохолдинг Заря»",
+          "legalAddress": "143000, Московская обл., г. Одинцово, ул. Южная, д. 4",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Вектор» (SC-00)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7811001128"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7811001128",
+          "kpp": "781101001",
+          "ogrn": "1027811001129",
+          "name": "ООО «Вектор»",
+          "legalAddress": "197376, г. Санкт-Петербург, ул. Профессора Попова, д. 23",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Северторг» (EC-03)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7844002230"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7844002230",
+          "kpp": "784401001",
+          "ogrn": "1027844002230",
+          "name": "ООО «Северторг»",
+          "legalAddress": "191036, г. Санкт-Петербург, Лиговский пр-т, д. 10",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ГБУ «Городская больница № 7» (R-02)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "7719003349"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "7719003349",
+          "kpp": "771901001",
+          "ogrn": "1027719003344",
+          "name": "ГБУ «Городская больница № 7»",
+          "legalAddress": "109004, г. Москва, ул. Земляной Вал, д. 12",
+          "status": "ACTIVE",
+          "isGovCustomer": true
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Таймаут» (EC-10)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999005565"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999005565",
+          "kpp": "999901001",
+          "ogrn": "1029999005563",
+          "name": "ООО «Таймаут»",
+          "legalAddress": "101000, г. Москва, ул. Мясницкая, д. 1",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Сбой временный» (повторы)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000013"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999000013",
+          "kpp": "999901001",
+          "ogrn": "1029999000019",
+          "name": "ООО «Сбой временный»",
+          "legalAddress": "101000, г. Москва, ул. Мясницкая, д. 3",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "Справочник ООО «Сбой постоянный» (EC-10)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/registry/v1/organizations",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000020"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999000020",
+          "kpp": "999901001",
+          "ogrn": "1029999000020",
+          "name": "ООО «Сбой постоянный»",
+          "legalAddress": "101000, г. Москва, ул. Мясницкая, д. 5",
+          "status": "ACTIVE",
+          "isGovCustomer": false
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    }
+  ]
+}

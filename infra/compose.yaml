@@ -1,0 +1,54 @@
+# Запуск (из корня репозитория):
+#   cp .env.example .env   # и заменить change_me
+#   docker compose --env-file .env -f infra/compose.yaml up -d
+# Сейчас в составе БД и три мока. Nginx, BFF, ядро и UI добавятся отдельными PR,
+# когда у сервисов появятся образы.
+name: b2b-order-flow
+
+services:
+  core-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CORE_DB_NAME:?задай CORE_DB_NAME в .env}
+      POSTGRES_PASSWORD: ${CORE_DB_ADMIN_PASSWORD:?задай CORE_DB_ADMIN_PASSWORD в .env}
+      # Нужны только скрипту создания ролей infra/postgres/init/01-roles.sh
+      CORE_DB_MIGRATION_USER: ${CORE_DB_MIGRATION_USER:?задай CORE_DB_MIGRATION_USER в .env}
+      CORE_DB_MIGRATION_PASSWORD: ${CORE_DB_MIGRATION_PASSWORD:?задай CORE_DB_MIGRATION_PASSWORD в .env}
+      CORE_DB_APP_USER: ${CORE_DB_APP_USER:?задай CORE_DB_APP_USER в .env}
+      CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?задай CORE_DB_APP_PASSWORD в .env}
+    volumes:
+      - core-db-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-crm:
+    image: wiremock/wiremock:3.13.2
+    restart: unless-stopped
+    environment:
+      WIREMOCK_OPTIONS: "--global-response-templating --disable-gzip --max-request-journal-entries 1000"
+    volumes:
+      - ../mocks/crm:/home/wiremock:ro
+
+  mock-billing:
+    image: wiremock/wiremock:3.13.2
+    restart: unless-stopped
+    environment:
+      WIREMOCK_OPTIONS: "--global-response-templating --disable-gzip --max-request-journal-entries 1000"
+    volumes:
+      - ../mocks/billing:/home/wiremock:ro
+
+  mock-registry:
+    image: wiremock/wiremock:3.13.2
+    restart: unless-stopped
+    environment:
+      WIREMOCK_OPTIONS: "--global-response-templating --disable-gzip --max-request-journal-entries 1000"
+    volumes:
+      - ../mocks/registry:/home/wiremock:ro
+
+volumes:
+  core-db-data:
