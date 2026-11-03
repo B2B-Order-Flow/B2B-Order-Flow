@@ -95,6 +95,7 @@ B2B-Order-Flow/
 ├── ui/                — React панель оператора и клиентский контур
 ├── mocks/             — WireMock моки внешних систем (CRM, биллинг, справочник ИНН)
 ├── infra/             — Docker Compose, Nginx, GitHub Actions
+├── tests/e2e/         — сквозные тесты (Playwright: API и UI)
 └── docs/              — Документация (Markdown, Mermaid)
 ```
 
