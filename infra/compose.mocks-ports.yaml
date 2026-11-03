@@ -1,0 +1,10 @@
+# Необязательный файл: открывает моки на localhost для отладки и сквозных тестов с хоста.
+# Подключается явно, в базовом compose портов у моков нет (nfr.md, раздел 8):
+#   docker compose --env-file .env -f infra/compose.yaml -f infra/compose.mocks-ports.yaml up -d
+services:
+  mock-crm:
+    ports: ["127.0.0.1:8081:8080"]
+  mock-billing:
+    ports: ["127.0.0.1:8082:8080"]
+  mock-registry:
+    ports: ["127.0.0.1:8083:8080"]

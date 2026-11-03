@@ -1,0 +1,20 @@
+{
+  "mappings": [
+    {
+      "name": "Любой другой ИНН: 404",
+      "priority": 10,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers"
+      },
+      "response": {
+        "status": 404,
+        "bodyFileName": "problem-not-found.json",
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    }
+  ]
+}

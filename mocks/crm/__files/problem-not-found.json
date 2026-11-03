@@ -1,0 +1,9 @@
+{
+  "type": "https://b2b-order-flow/errors/not-found",
+  "title": "Клиент не найден",
+  "status": 404,
+  "detail": "Клиент с таким ИНН не найден в CRM",
+  "code": "NOT_FOUND",
+  "correlationId": "{{request.headers.X-Correlation-Id}}",
+  "retryable": false
+}

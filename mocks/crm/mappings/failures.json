@@ -1,0 +1,102 @@
+{
+  "mappings": [
+    {
+      "name": "CRM 9999000013: попытка 1, 503",
+      "priority": 1,
+      "scenarioName": "crm-flaky-9999000013",
+      "requiredScenarioState": "Started",
+      "newScenarioState": "attempt-2",
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000013"
+          }
+        }
+      },
+      "response": {
+        "status": 503,
+        "bodyFileName": "problem-unavailable.json",
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM 9999000013: попытка 2, 503",
+      "priority": 1,
+      "scenarioName": "crm-flaky-9999000013",
+      "requiredScenarioState": "attempt-2",
+      "newScenarioState": "recovered",
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000013"
+          }
+        }
+      },
+      "response": {
+        "status": 503,
+        "bodyFileName": "problem-unavailable.json",
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM 9999000013: попытка 3 и далее, 200",
+      "priority": 1,
+      "scenarioName": "crm-flaky-9999000013",
+      "requiredScenarioState": "recovered",
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000013"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": {
+          "inn": "9999000013",
+          "name": "ООО «Шаткий»",
+          "segment": "SMB",
+          "assignedManagerLogin": "a.smirnova",
+          "updatedAt": "2026-10-01T09:00:00Z"
+        },
+        "headers": {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    },
+    {
+      "name": "CRM 9999000020: всегда 503 (EC-10)",
+      "priority": 1,
+      "request": {
+        "method": "GET",
+        "urlPath": "/crm/v1/customers",
+        "queryParameters": {
+          "inn": {
+            "equalTo": "9999000020"
+          }
+        }
+      },
+      "response": {
+        "status": 503,
+        "bodyFileName": "problem-unavailable.json",
+        "headers": {
+          "Content-Type": "application/problem+json; charset=utf-8",
+          "X-Correlation-Id": "{{request.headers.X-Correlation-Id}}"
+        }
+      }
+    }
+  ]
+}
