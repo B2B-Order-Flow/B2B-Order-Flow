@@ -93,7 +93,7 @@ B2B-Order-Flow/
 ├── bff-gateway/       — FastAPI BFF (без БД: REST прокси, валидация, WebSockets)
 ├── core-service/      — Java 21 Spring Boot (домен, FSM, маршруты, SLA, core_db)
 ├── ui/                — React панель оператора и клиентский контур
-├── mocks/             — WireMock моки внешних систем (CRM, биллинг)
+├── mocks/             — WireMock моки внешних систем (CRM, биллинг, справочник ИНН)
 ├── infra/             — Docker Compose, Nginx, GitHub Actions
 └── docs/              — Документация (Markdown, Mermaid)
 ```
