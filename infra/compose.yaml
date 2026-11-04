@@ -21,7 +21,9 @@ services:
       - core-db-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB}"]
+      # -h 127.0.0.1: пока идёт инициализация (скрипты в initdb.d), временный сервер слушает
+      # только сокет, и проверка без -h сообщила бы «готов» раньше, чем созданы роли
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10

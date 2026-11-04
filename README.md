@@ -124,7 +124,9 @@ curl -H "X-Correlation-Id: test-1" "http://localhost:8081/crm/v1/customers?inn=7
 | [`core-service/`](core-service) | Ядро (Spring Boot) |
 | [`ui/`](ui) | Веб-интерфейс (React) |
 | [`mocks/`](mocks) | Моки внешних систем (WireMock) |
-| [`infra/`](infra) | Docker Compose, скрипты БД, Nginx |
+| [`infra/`](infra) | Docker Compose, скрипты БД (Nginx добавится позже) |
+| [`tests/e2e/`](tests/e2e) | Тесты на Playwright: фикстуры, контрактные тесты моков, заготовки сквозных сценариев |
+| [`.github/workflows/`](.github/workflows) | CI в GitHub Actions |
 
 ## Тестирование
 
@@ -136,7 +138,9 @@ curl -H "X-Correlation-Id: test-1" "http://localhost:8081/crm/v1/customers?inn=7
 | Интеграционные | JUnit 5, Testcontainers, WireMock |
 | Сквозные (API и UI) | Playwright на поднятом стенде в Docker Compose |
 
-Команды запуска появятся вместе с кодом сервисов. Проверки в CI: линтеры, поиск секретов (`gitleaks`), проверка зависимостей.
+Контрактные тесты моков и заготовки сквозных сценариев лежат в [`tests/e2e/`](tests/e2e), запуск описан в его README. Команды запуска тестов сервисов появятся вместе с кодом.
+
+В CI (`.github/workflows/ci.yml`) сейчас работают поиск секретов (`gitleaks`), проверка JSON моков и `docker compose config`, а также тесты `tests/e2e`. Линтеры и сборка сервисов добавятся вместе с кодом.
 
 ## Документация
 
