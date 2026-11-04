@@ -1,0 +1,11 @@
+# Линтер и форматтер Python (ruff). Запуск из bff-gateway: ruff check . && ruff format --check .
+line-length = 120
+
+[lint]
+select = [
+    "E", # стиль pycodestyle
+    "F", # ошибки pyflakes: неиспользуемые импорты и переменные
+    "I", # порядок импортов
+    "B", # типичные баги flake8-bugbear
+    "UP", # устаревший синтаксис для целевой версии Python
+]
