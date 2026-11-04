@@ -67,6 +67,9 @@ jobs:
       - name: Проверка типов
         run: npm run typecheck
 
+      - name: Форматирование (Prettier)
+        run: npm run format:check
+
       - name: Фикстуры (без стенда)
         run: npm run test:fixtures
 
