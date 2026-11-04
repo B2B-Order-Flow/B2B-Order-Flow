@@ -1,6 +1,6 @@
 # infra
 
-Docker Compose, конфигурация Nginx, скрипты запуска и резервного копирования. Workflow GitHub Actions лежат в `.github/workflows/`.
+Docker Compose и скрипты инициализации БД. Конфигурация Nginx и резервное копирование появятся позже. Workflow GitHub Actions лежат в `.github/workflows/` в корне репозитория.
 
 Владелец: Салават.
 
