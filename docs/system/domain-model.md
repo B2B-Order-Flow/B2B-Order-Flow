@@ -137,7 +137,7 @@ erDiagram
 
 ### 4.4. SLA
 
-**`sla_timer`** — таймер срока: `id`, `request_id`, `kind` (`STAGE_SLA` — норматив этапа; `DATA_CHECK_CONTROL` — контрольный срок проверки данных; `MANAGER_ASSIGN_CONTROL` — контрольный срок назначения менеджера; `TV_CONTROL` — контрольный срок ТВ; `ACCEPTANCE` — срок приёмки; `CANCEL_RESPONSE` — ответ на запрос об отмене), `stage_id` (только для `STAGE_SLA`, иначе пусто), `norm_minutes`, `status` (`RUNNING` / `PAUSED` / `STOPPED`), `started_at`, `warn_at` (момент предупреждения), `due_at` (момент нарушения при условии, что пауз больше не будет), `elapsed_sla_seconds` (время без пауз), `next_event_at` (индексируется: предупреждение или нарушение), `warned_at`, `breached_at`, `escalation_level`. Планировщик `@Scheduled` + `Clock` выбирает таймеры по `next_event_at`.
+**`sla_timer`** — таймер срока: `id`, `request_id`, `kind` (`STAGE_SLA` — норматив этапа; `DATA_CHECK_CONTROL` — контрольный срок проверки данных; `MANAGER_ASSIGN_CONTROL` — контрольный срок назначения менеджера; `TV_CONTROL` — контрольный срок ТВ; `ACCEPTANCE` — срок приёмки; `CANCEL_RESPONSE` — ответ на запрос об отмене), `stage_id` (только для `STAGE_SLA`, иначе пусто), `norm_minutes`, `status` (`RUNNING` / `PAUSED` / `STOPPED`), `started_at`, `warn_at` (момент предупреждения), `due_at` (момент нарушения при условии, что пауз больше не будет), `escalate_at` (второй уровень эскалации, [sla.md](sla.md), 5.2), `elapsed_sla_seconds` (время без пауз), `next_event_at` (индексируется: предупреждение, нарушение, эскалация или событие предела паузы), `warned_at`, `breached_at`, `escalation_level`. Планировщик `@Scheduled` + `Clock` выбирает таймеры по `next_event_at`.
 
 **`sla_pause`** — журнал пауз: `id`, `timer_id`, `reason_code`, `set_by` (пользователь или `SYSTEM`), `comment`, `started_at`, `ended_at`, `limit_at` (предельный срок), `extended_count`, `extended_by`. В карточке показываются два времени: по SLA и календарное.
 
@@ -172,6 +172,8 @@ erDiagram
 **`audit_log`** — единый журнал: `id`, `created_at`, `correlation_id`, `actor_id`, `actor_role`, `company_id`, `request_id` (может быть пусто для компаний), `action`, `entity_type`, `entity_id`, `from_status`, `to_status`, `comment`, `details` (JSONB). Пользователю приложения выданы только `INSERT` и `SELECT`; миграции выполняет отдельный пользователь. В аудит попадают: смены статусов, решения, паузы SLA, отмены, изменения порогов, скачивания и экспорт, отказы в доступе (EC-16).
 
 **`notification`** — хранимое уведомление и источник событий для WebSocket: `id`, `recipient_user_id`, `request_id`, `event_type`, `payload` (JSONB), `created_at`, `read_at`, `published_at`, `attempts`. Читается по REST («непрочитанные»); WebSocket служит сигналом, а не источником правды.
+
+**`ws_ticket`** — одноразовый билет для установки WebSocket-соединения ([api-contract.md](api-contract.md), 4.4): `id`, `ticket_hash` (уникален; сам билет не хранится), `user_id`, `active_role`, `expires_at` (+30 секунд от выдачи), `used_at`. Просроченные и использованные билеты удаляются фоновой задачей ([nfr.md](nfr.md), раздел 5).
 
 ### 4.8. Справочники и настройки
 
@@ -214,3 +216,23 @@ erDiagram
 ## 7. Обязательные проверки доступа (для ревью и тестов)
 
 Все запросы к сущностям с `company_id` проходят через единую политику доступа ядра. Чтобы её нельзя было забыть, нужен архитектурный тест (контроллер без вызова политики роняет сборку) и негативный тест на каждый эндпоинт: чужая компания, удалённый сотрудник, неверная активная роль (EC-16, EC-17, EC-18).
+
+## 8. Соглашения по схеме
+
+Схему (миграции Flyway) и сущности JPA пишут разные люди, поэтому правила ниже обязательны для обеих сторон. Ядро стартует с `spring.jpa.hibernate.ddl-auto=validate`: расхождение сущности и таблицы останавливает запуск, а не проявляется на демо.
+
+| Тема | Правило |
+|---|---|
+| Первичный ключ | `uuid`, генерируется в БД (`gen_random_uuid()`) |
+| Человекочитаемый номер | `request.number` — `text`, уникален, формат `REQ-ГГГГ-NNNNNN` из последовательности |
+| Время | `timestamptz`, хранится в UTC; даты без времени (`desired_date`, `work_calendar.date`) — `date` |
+| Деньги | `numeric(14,2)`; проценты — `numeric(5,2)` |
+| Перечисления | `text` с ограничением `CHECK (… IN (…))`, без типов `enum` PostgreSQL: их сложнее менять миграциями |
+| Строки | `text`; ограничения длины — `CHECK` там, где они заданы требованиями (комментарий — 4 000 символов, [nfr.md](nfr.md), раздел 7) |
+| Обязательность | `NOT NULL` по умолчанию; допускают пустое значение только поля, которые заполняются позже (даты событий, `manager_id`, `assignee_id` и т. п.) или помечены в разделе 4 как «может быть пусто» |
+| Внешние ключи | `ON DELETE RESTRICT` везде: данные не удаляются ([nfr.md](nfr.md), раздел 5) |
+| Служебные поля | `created_at timestamptz NOT NULL DEFAULT now()` во всех таблицах; `updated_at` — в изменяемых; `version bigint NOT NULL DEFAULT 0` — в `request`, `request_stage`, `cancellation_request` |
+| JSONB | `jsonb NOT NULL DEFAULT '{}'` (для массивов — `'[]'`) |
+| Имена | `snake_case`, таблицы в единственном числе, как в разделе 4; индексы `ix_<таблица>_<поля>`, уникальные `ux_…`, проверки `ck_…`, внешние ключи `fk_…` |
+| Миграции | `V<номер>__<описание>.sql` в `core-service/src/main/resources/db/migration/`; демо-пользователи и компании — в `db/demo/`, только для профилей `DEMO` и тестового ([integrations.md](integrations.md), 5.1); применённую миграцию не правят, исправление — новой миграцией ([nfr.md](nfr.md), раздел 6); справочники — отдельными миграциями с данными; повторяемые миграции (`R__`) не используются |
+| Пользователи БД | Владелец схемы — только для миграций; пользователь приложения — чтение и запись без `UPDATE` и `DELETE` на `audit_log`; `backup_ro` — только чтение для бэкапа |

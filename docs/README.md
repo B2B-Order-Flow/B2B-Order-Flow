@@ -14,7 +14,9 @@
 - [Границы проекта](scope.md)
 - [Покрытие ТЗ](tz-coverage.md)
 - [Команда](team.md)
+- [План разработки](dev-plan.md)
 - [План недели 1](plan-week1.md)
+- [План недели 2](plan-week2.md)
 
 ### Бизнес-анализ
 - [Исследование рынка B2B](business/research-b2b.md)
