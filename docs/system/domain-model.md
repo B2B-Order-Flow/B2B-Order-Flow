@@ -118,6 +118,7 @@ erDiagram
 | `status` | `QUEUED` / `IN_PROGRESS` / `DONE` / `RETURNED` / `REJECTED` / `SUPERSEDED` / `CANCELLED` |
 | `queue_role` | Роль очереди |
 | `assignee_id` | Исполнитель (после взятия или назначения координатором) |
+| `needs_reassignment` | `boolean`; исполнитель деактивирован или лишён роли, этап ждёт переназначения координатором ([status-model.md](status-model.md), 6.5) |
 | `required_by_rules` | `text[]` — ID правил, из-за которых этап создан (например, `{R-01,R-03}`) |
 | `created_at`, `taken_at`, `finished_at` | |
 
@@ -136,7 +137,7 @@ erDiagram
 
 ### 4.4. SLA
 
-**`sla_timer`** — таймер срока: `id`, `request_id`, `kind` (`STAGE_SLA` — норматив этапа; `DATA_CHECK_CONTROL` — контрольный срок проверки данных; `MANAGER_ASSIGN_CONTROL` — контрольный срок назначения менеджера; `TV_CONTROL` — контрольный срок ТВ; `ACCEPTANCE` — срок приёмки; `CANCEL_RESPONSE` — ответ на запрос об отмене), `stage_id` (только для `STAGE_SLA`, иначе пусто), `norm_minutes`, `status` (`RUNNING` / `PAUSED` / `STOPPED`), `started_at`, `elapsed_sla_seconds` (время без пауз), `next_event_at` (индексируется: предупреждение или нарушение), `warned_at`, `breached_at`, `escalation_level`. Планировщик `@Scheduled` + `Clock` выбирает таймеры по `next_event_at`.
+**`sla_timer`** — таймер срока: `id`, `request_id`, `kind` (`STAGE_SLA` — норматив этапа; `DATA_CHECK_CONTROL` — контрольный срок проверки данных; `MANAGER_ASSIGN_CONTROL` — контрольный срок назначения менеджера; `TV_CONTROL` — контрольный срок ТВ; `ACCEPTANCE` — срок приёмки; `CANCEL_RESPONSE` — ответ на запрос об отмене), `stage_id` (только для `STAGE_SLA`, иначе пусто), `norm_minutes`, `status` (`RUNNING` / `PAUSED` / `STOPPED`), `started_at`, `warn_at` (момент предупреждения), `due_at` (момент нарушения при условии, что пауз больше не будет), `elapsed_sla_seconds` (время без пауз), `next_event_at` (индексируется: предупреждение или нарушение), `warned_at`, `breached_at`, `escalation_level`. Планировщик `@Scheduled` + `Clock` выбирает таймеры по `next_event_at`.
 
 **`sla_pause`** — журнал пауз: `id`, `timer_id`, `reason_code`, `set_by` (пользователь или `SYSTEM`), `comment`, `started_at`, `ended_at`, `limit_at` (предельный срок), `extended_count`, `extended_by`. В карточке показываются два времени: по SLA и календарное.
 
@@ -177,7 +178,7 @@ erDiagram
 | Таблица | Назначение |
 |---|---|
 | `routing_config` | Пороги маршрутизации ([routing-rules.md](routing-rules.md), раздел 4) |
-| `sla_norm` | Нормативы SLA по типу этапа, профили `PROD` и `DEMO` (минуты) |
+| `sla_norm` | Нормативы SLA по типу этапа, профили `PROD` и `DEMO` (минуты; `calendar_kind`: `WORK` или `CALENDAR`) |
 | `work_calendar` | Календарь профиля PROD: дата, рабочий ли день, примечание, часовой пояс |
 | `pause_reason` | Закрытый справочник причин паузы: код, название, автоматическая ли, кто ставит и снимает |
 | `cancel_reason` | Причины отмены с признаком стороны (клиент/оператор) |

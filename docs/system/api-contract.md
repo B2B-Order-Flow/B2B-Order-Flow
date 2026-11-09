@@ -101,7 +101,7 @@ GET /api/v1/requests?page=0&size=20&sort=createdAt,desc&status=IN_APPROVAL&compa
 | `STAGE_ALREADY_DECIDED` | 409 | Этап закрыт или решение уже принято | EC-13 |
 | `STAGE_NOT_IN_YOUR_QUEUE` | 403 | Этап не в очереди активной роли | — |
 | `SELF_APPROVAL_FORBIDDEN` | 403 | Менеджер заявки согласует свою заявку | EC-18 |
-| `CROSS_COMPANY_ACCESS` | 404 | Заявка другой компании | EC-16 |
+| `NOT_FOUND` | 404 | Объекта нет или он недоступен пользователю; ответ одинаков для чужой и несуществующей заявки | EC-16 |
 | `MEMBERSHIP_REVOKED` | 403 | Сотрудник удалён из компании | EC-17 |
 | `CANCEL_AFTER_ACTIVATION` | 409 | Отмена после активации | EC-09 |
 | `CANCEL_REQUEST_EXISTS` | 409 | Уже есть открытый запрос на отмену | 11.3 процесса |
@@ -208,6 +208,13 @@ WS  wss://<host>/ws?ticket=wst_...
 - Коды типов событий перечислены в разделе 7. Кто какое событие получает — в `notifications.md`.
 - `ping` от сервера раз в 30 секунд; клиент переподключается с экспоненциальной задержкой (1, 2, 4, 8, максимум 30 секунд).
 
+### 4.5. Канал событий ядро → BFF
+
+Ядро не вызывает BFF. BFF при старте открывает к ядру одно постоянное соединение `GET /internal/v1/events/stream` (`text/event-stream`) с заголовком `X-Internal-Token` и получает по нему сигналы о событиях, записанных в `notification` (рассылка выполняется после коммита, `AFTER_COMMIT`). В сигнале только идентификатор события и адресат (`userId`), данные клиент забирает по REST. BFF рассылает сигнал по WebSocket-соединениям адресата.
+
+- При обрыве соединения BFF переподключается с нарастающей задержкой (1–30 с) и передаёт `Last-Event-ID`; пропущенные сигналы не критичны, так как клиент после переподключения WebSocket читает непрочитанные уведомления по REST.
+- Порты ядра наружу не публикуются, соединение идёт внутри сети Docker.
+
 ## 5. Идемпотентность и конкурентность
 
 ### 5.1. Идемпотентность создания
@@ -267,6 +274,8 @@ POST /api/v1/stages/{id}/decision
 | `POST /requests/{id}/submit` | КЛ | T01 | Отправить оператору |
 | `POST /requests/{id}/recheck-data` | КООРД | T02, T03 | Повторная проверка во внешних системах (EC-10) |
 | `POST /requests/{id}/claim` | МП | T03b | Взять заявку из очереди менеджеров |
+| `POST /requests/{id}/assign-manager` | КООРД | T03b или — | Назначить менеджера, когда очередь пуста (T03b, EC-19), или переназначить менеджера в любом нетерминальном статусе ([status-model.md](status-model.md), 6.5) |
+| `PATCH /requests/{id}/data` | МП | — | Исправить данные заявки в статусе `REWORK` (`version` в теле), затем `resubmit` |
 | `POST /requests/{id}/commercial-terms` | МП | T04 | Зафиксировать тариф, скидку, тип договора и отправить в работу |
 | `POST /requests/{id}/resubmit` | МП | T10 | Отправить повторно после доработки |
 | `POST /requests/{id}/from-rejected` | КЛ | — | Новая заявка на основе отклонённой (`parentRequestId`) |
@@ -292,8 +301,8 @@ POST /api/v1/stages/{id}/decision
 |---|---|---|---|
 | `GET /stages?queueRole=LAWYER&status=QUEUED` | исполнители, КООРД | — | Очередь роли |
 | `GET /stages/my` | исполнители | — | «Мои задачи», сортировка по остатку SLA |
-| `POST /stages/{id}/claim` | исполнители | — | Взять этап в работу |
-| `POST /stages/{id}/assign` | КООРД | — | Назначить или переназначить исполнителя |
+| `POST /stages/{id}/claim` | исполнители | T14 (первый этап исполнения) | Взять этап в работу |
+| `POST /stages/{id}/assign` | КООРД | T14 (первый этап исполнения) | Назначить или переназначить исполнителя |
 | `POST /stages/{id}/tech-result` | ТС | T05, T06, T07, T15b | Результат ТВ: `AVAILABLE`, `WITH_CONSTRUCTION` (CAPEX, срок), `NONE` (причина) |
 | `POST /stages/{id}/return` | ТС | T09b | Вернуть заявку менеджеру на доработку с этапа проверки ТВ |
 | `POST /stages/{id}/decision` | ЮР, ФК, ЗК, РУК | T08, T09, T11 | `APPROVE`, `RETURN`, `REJECT` (комментарий обязателен для двух последних) |
@@ -306,6 +315,7 @@ POST /api/v1/stages/{id}/decision
 | Метод и путь | Роль | Переход | Что делает |
 |---|---|---|---|
 | `POST /requests/{id}/contract/sent` | МП | — | Отметка «Договор отправлен» → пауза SLA |
+| `POST /requests/{id}/contract/change-request` | МП | T12 | Зафиксировать просьбу клиента изменить условия; комментарий обязателен |
 | `POST /requests/{id}/contract/concluded` | МП | T13 | Номер и дата подписанного договора |
 | `POST /requests/{id}/contract/accept-offer` | КЛ | T13 | Акцепт оферты в системе |
 | `POST /requests/{id}/act/sent` | МП | — | Отметка «Акт отправлен» → пауза и срок приёмки |
@@ -324,6 +334,7 @@ POST /api/v1/stages/{id}/decision
 | `POST /cancellation-requests/{id}/confirm-costs` | ФК | — | Подтвердить или вернуть сумму менеджеру |
 | `POST /cancellation-requests/{id}/approve` | РУК | T21, T21b | Утвердить отмену по инициативе оператора |
 | `POST /cancellation-requests/{id}/accept` | КЛ | T21 | Принять условия отмены |
+| `POST /cancellation-requests/{id}/reject` | КЛ, РУК | T22 | КЛ отклоняет условия оператора; РУК отклоняет инициативу оператора; комментарий обязателен |
 | `POST /cancellation-requests/{id}/withdraw` | КЛ, МП | T22 | Отозвать свой запрос (EC-21) |
 
 ### 6.7. Комментарии и вложения
@@ -394,12 +405,17 @@ POST /api/v1/stages/{id}/decision
 | `REQUEST_ASSIGNED` | Заявка назначена менеджеру (T03b) |
 | `STAGE_QUEUED` | Новый этап в очереди роли |
 | `STAGE_ASSIGNED` | Этап назначен исполнителю |
+| `STAGE_REASSIGN_REQUIRED` | Исполнитель деактивирован, этап требует переназначения ([status-model.md](status-model.md), 6.5) |
 | `STATUS_CHANGED` | Смена статуса заявки |
-| `APPROVAL_RETURNED` | Возврат на доработку (T09) |
+| `APPROVAL_RETURNED` | Возврат на доработку согласующим (T09) |
+| `TECH_RETURNED` | Возврат на доработку техническим специалистом (T09b) |
+| `CONTRACT_CHANGE_REQUESTED` | Клиент просит изменить условия договора (T12) |
+| `TECH_RECHECK_REQUIRED` | Подключение невозможно по факту, нужна повторная ТВ (T15) |
 | `APPROVAL_REJECTED` | Отклонение (T08) |
 | `TECH_RESULT_NONE` | Отказ по ТВ (T05) |
 | `CONTRACT_READY` | Клиенту доступны итоговые условия |
 | `SERVICE_ACTIVATED` | Услуга активирована (T16) |
+| `DEFECT_CLAIMED` | Клиент заявил претензию, создан этап «Устранение замечаний» (T17) |
 | `ACT_SENT` | Клиенту отправлен акт |
 | `ACCEPTANCE_REMINDER` | Напоминание о приёмке |
 | `REQUEST_CLOSED` | Заявка закрыта (T18) |
@@ -423,10 +439,10 @@ POST /api/v1/stages/{id}/decision
 |---|---|---|
 | Вызов mock-сервиса из ядра | 2 с на попытку | До 3 попыток с задержкой 200 мс и 600 мс ([integrations.md](integrations.md)) |
 | Обработчик ядра | 10 с | — |
-| `httpx` в BFF | 15 с (`connect` 2 с) | Только для `GET` |
+| `httpx` в BFF | 12 с на попытку (`connect` 2 с) | Только для `GET`: один повтор через 300 мс, всего не более 25 с |
 | Nginx `proxy_read_timeout` | 30 с | — |
 
-- Внешние вызовы выполняются **до открытия транзакции** и не держат соединение Hikari.
+- Внешние вызовы выполняются вне транзакций: после коммита транзакции T01 и до транзакции с результатами ([status-model.md](status-model.md), 6.1.1) и не держат соединение Hikari.
 - Если внешняя система не ответила, заявка остаётся в `DATA_CHECK` с `integrationError: true`, HTTP-ответ при этом успешный (`200`), а повторную проверку выполняет фоновая задача или координатор через `POST /requests/{id}/recheck-data` (EC-10).
 - При недоступности ядра BFF отдаёт `503` или `504` с `retryable: true`; интерфейс показывает сообщение и перезапрашивает состояние.
 
