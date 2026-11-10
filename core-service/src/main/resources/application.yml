@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: core-service
+
+  datasource:
+    url: ${CORE_DB_URL:jdbc:postgresql://localhost:5432/${CORE_DB_NAME:core_db}}
+    username: ${CORE_DB_APP_USER:core_app}
+    password: ${CORE_DB_APP_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+
+  # Миграции выполняет отдельный пользователь-владелец схемы,
+  # приложение работает под пользователем с правами только на данные.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    user: ${CORE_DB_MIGRATION_USER:${CORE_DB_APP_USER:core_app}}
+    password: ${CORE_DB_MIGRATION_PASSWORD:${CORE_DB_APP_PASSWORD:}}
+    placeholders:
+      app-user: ${CORE_DB_APP_USER:core_app}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET}
+    jwt-ttl: 8h
+    internal-token: ${INTERNAL_TOKEN}
+  integration:
+    crm-url: ${MOCK_CRM_URL:http://localhost:8081}
+    billing-url: ${MOCK_BILLING_URL:http://localhost:8082}
+    registry-url: ${MOCK_REGISTRY_URL:http://localhost:8083}
+    connect-timeout: 1s
+    read-timeout: 2s
+    max-attempts: 3
+    retry-delay: 200ms
+    retry-multiplier: 3

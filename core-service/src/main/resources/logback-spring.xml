@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+      Логи ядра — построчный JSON в stdout (docs/architecture/logging.md).
+      Поля: timestamp, level, service, message, correlationId и MDC-контекст
+      (userId, role, requestId). Секреты и тела внешних ответов не пишутся.
+    -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <customFields>{"service":"core-service"}</customFields>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <level>level</level>
+                <thread>thread</thread>
+                <logger>logger</logger>
+                <message>message</message>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="org.springframework.web" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="JSON"/>
+    </root>
+</configuration>
