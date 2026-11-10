@@ -86,6 +86,7 @@ public class RequestViewFactory {
                 .statusChangedAt(request.getStatusChangedAt())
                 .integrationError(request.isIntegrationError())
                 .commitmentLevel((int) request.getCommitmentLevel())
+                .routeVersion(request.getRouteVersion())
                 .version(request.getVersion())
                 .createdBy(request.getCreatedBy())
                 .createdAt(request.getCreatedAt())
@@ -132,6 +133,10 @@ public class RequestViewFactory {
 
     /** Клиент видит клиентскую версию карточки, даже если у него есть и операторская роль. */
     private static boolean isClientView(CurrentUser viewer) {
+        if (viewer == null) {
+            // Системный актор (фоновые переходы) видит служебную версию карточки.
+            return false;
+        }
         Role active = viewer.activeRole();
         if (active != null) {
             return active.isClientRole();

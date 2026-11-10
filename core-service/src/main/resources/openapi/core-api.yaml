@@ -5,7 +5,7 @@ info:
   description: |
     Внутренний контракт транзакционного ядра B2B-Order-Flow. Единственный источник истины
     для API: серверные интерфейсы генерируются из этого файла (`openapi-generator`), контроллеры
-    их реализуют. Изменения контракта — отдельным PR по правилам CODEOWNERS.
+    их реализуют. Изменения контракта — отдельным PR с ревью Дениса.
 
     ## Доступ
     Все пути начинаются с `/internal/v1` и доступны только из приватной сети Docker.
@@ -946,6 +946,9 @@ components:
           type: boolean
         commitmentLevel:
           type: integer
+        routeVersion:
+          type: integer
+          description: Версия маршрута; растёт при каждой пересборке.
         version:
           type: integer
           format: int64
