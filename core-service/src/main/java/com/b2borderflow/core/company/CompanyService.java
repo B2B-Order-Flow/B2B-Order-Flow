@@ -88,10 +88,19 @@ public class CompanyService {
             return idempotencyService.convert(stored.get(), CompanyView.class);
         }
 
-        String inn = request.getInn().trim();
+        String inn = request.getInn() == null ? "" : request.getInn().trim();
+        List<Violation> violations = new java.util.ArrayList<>();
+        if (request.getName() == null || request.getName().isBlank()) {
+            violations.add(new Violation("name", "REQUIRED", "Укажите название компании"));
+        }
+        if (request.getLegalAddress() == null || request.getLegalAddress().isBlank()) {
+            violations.add(new Violation("legalAddress", "REQUIRED", "Укажите юридический адрес"));
+        }
         if (!innValidator.isValid(inn)) {
-            throw ApiException.validation("Неверный ИНН",
-                    List.of(new Violation("inn", "INVALID", "Проверьте длину и контрольную сумму ИНН")));
+            violations.add(new Violation("inn", "INVALID", "Проверьте длину и контрольную сумму ИНН"));
+        }
+        if (!violations.isEmpty()) {
+            throw ApiException.validation("Проверьте данные компании", violations);
         }
         if (companyRepository.existsByInnAndStatus(inn, CompanyStatus.ACTIVE)) {
             throw new ApiException(ErrorCode.COMPANY_INN_EXISTS,

@@ -52,7 +52,27 @@ public class AuthService {
 
     @Transactional
     public UserView register(RegisterUserRequest request) {
-        String login = request.getLogin().trim();
+        String login = request.getLogin() == null ? "" : request.getLogin().trim();
+        String fullName = request.getFullName() == null ? "" : request.getFullName().trim();
+        String email = request.getEmail() == null ? "" : request.getEmail().trim();
+
+        List<Violation> violations = new java.util.ArrayList<>();
+        if (login.length() < 3 || login.length() > 100) {
+            violations.add(new Violation("login", "INVALID", "Логин должен быть от 3 до 100 символов"));
+        }
+        if (request.getPassword() == null || request.getPassword().length() < 8) {
+            violations.add(new Violation("password", "INVALID", "Пароль должен быть не короче 8 символов"));
+        }
+        if (fullName.isBlank()) {
+            violations.add(new Violation("fullName", "REQUIRED", "Укажите ФИО"));
+        }
+        if (email.isBlank()) {
+            violations.add(new Violation("email", "REQUIRED", "Укажите email"));
+        }
+        if (!violations.isEmpty()) {
+            throw ApiException.validation("Проверьте данные регистрации", violations);
+        }
+
         if (userRepository.existsByLoginIgnoreCase(login)) {
             throw ApiException.validation(
                     "Логин уже занят",
@@ -62,8 +82,8 @@ public class AuthService {
         AppUser user = new AppUser();
         user.setLogin(login);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setFullName(request.getFullName().trim());
-        user.setEmail(request.getEmail().trim());
+        user.setFullName(fullName);
+        user.setEmail(email);
         user.setActive(true);
         AppUser saved = userRepository.save(user);
 
