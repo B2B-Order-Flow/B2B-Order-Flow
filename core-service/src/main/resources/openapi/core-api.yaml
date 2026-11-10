@@ -1,0 +1,1107 @@
+openapi: 3.0.3
+info:
+  title: B2B-Order-Flow Core API
+  version: 0.1.0
+  description: |
+    Внутренний контракт транзакционного ядра B2B-Order-Flow. Единственный источник истины
+    для API: серверные интерфейсы генерируются из этого файла (`openapi-generator`), контроллеры
+    их реализуют. Изменения контракта — отдельным PR по правилам CODEOWNERS.
+
+    ## Доступ
+    Все пути начинаются с `/internal/v1` и доступны только из приватной сети Docker.
+    Каждый запрос обязан содержать `X-Internal-Token` (запрос без него получает `401`).
+    Защищённые операции дополнительно требуют `Authorization: Bearer <JWT>` ядра.
+
+    ## Активная роль
+    Если у пользователя несколько ролей, защищённая операция принимает `X-Active-Role`.
+    Без заголовка при единственной роли используется она; при нескольких — `422 ACTIVE_ROLE_REQUIRED`.
+    Переданная роль, которой у пользователя нет, отклоняется с `403`. Решение о правах
+    принимается по актуальным данным БД, а не только по JWT.
+
+    ## Ошибки
+    Ошибки возвращаются как `application/problem+json` (RFC 9457) с полями `code`,
+    `correlationId`, `retryable` и, для `422`, `violations`. `X-Correlation-Id` принимается
+    от клиента, генерируется при отсутствии и возвращается в ответе.
+
+    ## Идемпотентность и версии
+    Создание заявки и компании поддерживает `Idempotency-Key`. Действия, меняющие состояние
+    заявки, принимают `version` в теле; устаревшая версия — `409 VERSION_CONFLICT`.
+    Повторный вызов перехода из уже изменённого статуса — `409 ILLEGAL_TRANSITION`.
+
+    ## Пагинация
+    Списки страничные: `page` (с нуля), `size` (по умолчанию 20, максимум 100), `sort`
+    (`field,asc|desc`). Фильтры и сортировка — только по колонкам БД.
+
+    ## Что решает ядро
+    Бизнес-валидация, права, статусы, принадлежность компании и фильтрация полей по роли.
+    BFF проксирует ответ без фильтрации.
+servers:
+  - url: http://core-service:8080
+    description: Приватная сеть Docker Compose
+security:
+  - internalToken: []
+    bearerAuth: []
+tags:
+  - name: Auth
+    description: Аутентификация и токен
+  - name: Companies
+    description: Компании-клиенты
+  - name: Admin
+    description: Администрирование компаний
+  - name: Requests
+    description: Заявки и их переходы
+paths:
+  /internal/v1/auth/register:
+    post:
+      operationId: registerUser
+      tags: [Auth]
+      summary: Зарегистрировать пользователя платформы
+      description: Гость регистрируется на платформе. Компания регистрируется отдельно.
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequest'
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserView'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Войти и получить JWT
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Токен выдан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/me:
+    get:
+      operationId: getCurrentUser
+      tags: [Auth]
+      summary: Текущий пользователь
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /internal/v1/companies:
+    post:
+      operationId: registerCompany
+      tags: [Companies]
+      summary: Зарегистрировать компанию
+      description: |
+        Создаёт компанию в статусе `PENDING` и делает зарегистрировавшего её пользователя
+        владельцем (`CLIENT_OWNER`). ИНН проверяется локально и в справочнике клиентов.
+        Дубль активного ИНН — `409 COMPANY_INN_EXISTS`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCompanyRequest'
+      responses:
+        '201':
+          description: Компания создана и ожидает подтверждения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/companies/{companyId}:
+    get:
+      operationId: getCompany
+      tags: [Companies]
+      summary: Карточка компании
+      description: Доступна участникам компании и администратору; остальным — `404`.
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      responses:
+        '200':
+          description: Компания
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /internal/v1/admin/companies:
+    get:
+      operationId: listCompaniesForConfirmation
+      tags: [Admin]
+      summary: Очередь подтверждения компаний
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CompanyStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница компаний
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /internal/v1/admin/companies/{companyId}/confirm:
+    post:
+      operationId: confirmCompany
+      tags: [Admin]
+      summary: Подтвердить компанию
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyDecisionRequest'
+      responses:
+        '200':
+          description: Компания подтверждена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /internal/v1/admin/companies/{companyId}/reject:
+    post:
+      operationId: rejectCompany
+      tags: [Admin]
+      summary: Отклонить компанию
+      description: Причина обязательна, иначе `422 VALIDATION_FAILED`.
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyDecisionRequest'
+      responses:
+        '200':
+          description: Компания отклонена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /internal/v1/requests:
+    post:
+      operationId: createRequest
+      tags: [Requests]
+      summary: Создать черновик заявки
+      description: |
+        Доступно представителю подтверждённой компании (`CLIENT_OWNER`, `CLIENT_ADMIN`,
+        `CLIENT_REQUESTER`). Вместе с заявкой создаётся одно предложение услуги (`SELECTED`),
+        чтобы выполнялось правило «не менее одного `service_offer` на заявку».
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequestPayload'
+      responses:
+        '201':
+          description: Черновик создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    get:
+      operationId: listRequests
+      tags: [Requests]
+      summary: Список заявок
+      description: |
+        Клиент видит только заявки своей компании. Менеджер — свои заявки и очередь
+        нераспределённых (`status=DATA_CHECK`, `unassigned=true`, данные проверены).
+        Координатор и руководитель B2B — все. Прочие исполнители — заявки, где у них есть
+        этап. Администратор списка не видит (`403`).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RequestStatus'
+        - name: companyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: managerId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: unassigned
+          in: query
+          required: false
+          description: Только заявки без менеджера
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Страница заявок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /internal/v1/requests/{requestId}:
+    get:
+      operationId: getRequest
+      tags: [Requests]
+      summary: Карточка заявки
+      description: |
+        Чужая заявка возвращает `404` (EC-16), попытка пишется в `audit_log`.
+        Клиентская версия не содержит исполнителей, внутренних сумм и служебных полей.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Заявка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    patch:
+      operationId: updateDraft
+      tags: [Requests]
+      summary: Исправить черновик
+      description: Только автор заявки и только в статусе `DRAFT`; нужен `version`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRequestPayload'
+      responses:
+        '200':
+          description: Черновик обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+    delete:
+      operationId: deleteDraft
+      tags: [Requests]
+      summary: Удалить неотправленный черновик
+      description: Мягкое удаление (`deleted_at`), доступно только автору в статусе `DRAFT`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+      responses:
+        '204':
+          description: Черновик удалён
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /internal/v1/requests/{requestId}/submit:
+    post:
+      operationId: submitRequest
+      tags: [Requests]
+      summary: Отправить заявку оператору (T01)
+      description: |
+        Транзакция 1 проверяет данные, создаёт ревизию, ставит `DATA_CHECK` и пишет аудит.
+        Затем вне транзакции параллельно опрашиваются CRM, биллинг и справочник; результаты
+        сохраняются второй транзакцией. Если все системы ответили — T03, при известном
+        менеджере CRM сразу T03b (`WITH_MANAGER`). Сбой внешней системы не откатывает
+        заявку: она остаётся в `DATA_CHECK` с `integrationError: true` (EC-10),
+        а ответ всё равно `200` с предупреждением `EXTERNAL_SYSTEM_UNAVAILABLE`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Заявка принята; статус и предупреждения — в теле
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /internal/v1/requests/{requestId}/recheck-data:
+    post:
+      operationId: recheckRequestData
+      tags: [Requests]
+      summary: Повторная проверка данных (T02/T03, EC-10)
+      description: |
+        Координатор повторяет проверку только по системам, которые ещё не ответили успешно.
+        Уже полученные данные не перезаписываются. Заявка остаётся в `DATA_CHECK`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Результат повторной проверки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /internal/v1/requests/{requestId}/claim:
+    post:
+      operationId: claimRequest
+      tags: [Requests]
+      summary: Взять заявку из очереди менеджеров (T03b)
+      description: |
+        Менеджер по продажам берёт заявку, у которой ещё нет менеджера и данные проверены.
+        Заявка переходит в `WITH_MANAGER`, `manager_id` заполняется текущим пользователем.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Заявка взята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+  /internal/v1/requests/{requestId}/assign-manager:
+    post:
+      operationId: assignManager
+      tags: [Requests]
+      summary: Назначить или переназначить менеджера (T03b, EC-19)
+      description: |
+        Координатор назначает менеджера, когда очередь пуста (T03b), или переназначает
+        менеджера в любом нетерминальном статусе (раздел 6.5 статусной модели). Назначаемый
+        пользователь должен быть активен и иметь роль `SALES_MANAGER`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignManagerPayload'
+      responses:
+        '200':
+          description: Менеджер назначен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /internal/v1/requests/{requestId}/history:
+    get:
+      operationId: getRequestHistory
+      tags: [Requests]
+      summary: История действий по заявке
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница записей аудита
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntryPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+components:
+  securitySchemes:
+    internalToken:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+      description: Общий секрет BFF → ядро из переменной окружения.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT пользователя, выдаётся и проверяется только ядром.
+  parameters:
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CompanyId:
+      name: companyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Ключ идемпотентности (UUID). Повтор с тем же ключом и телом возвращает исходный
+        результат; с другим телом — `409 IDEMPOTENCY_KEY_REUSED`.
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: Поле и направление, например `createdAt,desc`.
+      schema:
+        type: string
+        default: createdAt,desc
+  responses:
+    ValidationError:
+      description: Ошибка валидации бизнес-правил
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnauthorizedError:
+      description: Нет токена, токен истёк или неверный межсервисный токен
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ForbiddenError:
+      description: Роль или принадлежность компании не позволяют действие
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFoundError:
+      description: Объекта нет или он недоступен пользователю
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ConflictError:
+      description: Конфликт версии, статуса или повторного действия
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Необработанная ошибка ядра
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      description: Ошибка в формате RFC 9457 с машинным кодом.
+      required: [type, title, status, code, correlationId, retryable]
+      properties:
+        type:
+          type: string
+          example: https://b2b-order-flow/errors/illegal-transition
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          example: ILLEGAL_TRANSITION
+        correlationId:
+          type: string
+        retryable:
+          type: boolean
+        violations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Violation'
+    Violation:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+    Warning:
+      type: object
+      description: 'Не ошибка: заявка принята, но что-то требует внимания.'
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: EXTERNAL_SYSTEM_UNAVAILABLE
+        message:
+          type: string
+    PageInfo:
+      type: object
+      required: [number, size, totalElements, totalPages]
+      properties:
+        number:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    RegisterUserRequest:
+      type: object
+      required: [login, password, fullName, email]
+      properties:
+        login:
+          type: string
+          minLength: 3
+          maxLength: 100
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+        fullName:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 255
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      required: [accessToken, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
+          format: int64
+          example: 28800
+        user:
+          $ref: '#/components/schemas/UserView'
+    UserView:
+      type: object
+      required: [id, login, fullName, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        login:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        companyRoles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        operatorRoles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        companies:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompanyBrief'
+    CompanyBrief:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/CompanyStatus'
+    RegisterCompanyRequest:
+      type: object
+      required: [name, inn, legalAddress]
+      properties:
+        name:
+          type: string
+          maxLength: 500
+        inn:
+          type: string
+          description: 10 цифр для организации, 12 — для ИП
+        kpp:
+          type: string
+          maxLength: 9
+        ogrn:
+          type: string
+          maxLength: 15
+        legalAddress:
+          type: string
+          maxLength: 500
+    CompanyDecisionRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+          description: Обязательна для отклонения.
+        comment:
+          type: string
+          maxLength: 4000
+    CompanyView:
+      type: object
+      required: [id, name, inn, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        inn:
+          type: string
+        kpp:
+          type: string
+        ogrn:
+          type: string
+        legalAddress:
+          type: string
+        status:
+          $ref: '#/components/schemas/CompanyStatus'
+        rejectReason:
+          type: string
+        confirmedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CompanyPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompanyView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    CreateRequestPayload:
+      type: object
+      description: |
+        Поля черновика. Обязательность бизнес-полей проверяется при отправке (T01),
+        а не при создании черновика: клиент заполняет заявку постепенно.
+      properties:
+        address:
+          type: string
+          maxLength: 500
+        requestedSpeedMbps:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        desiredDate:
+          type: string
+          format: date
+        contactName:
+          type: string
+          maxLength: 255
+        contactPhone:
+          type: string
+          maxLength: 32
+        contractPreference:
+          $ref: '#/components/schemas/ContractType'
+        clientComment:
+          type: string
+          maxLength: 4000
+    UpdateRequestPayload:
+      allOf:
+        - $ref: '#/components/schemas/CreateRequestPayload'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    VersionedAction:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    AssignManagerPayload:
+      type: object
+      required: [managerId, version]
+      properties:
+        managerId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ServiceOfferView:
+      type: object
+      required: [id, status, tariffType, contractType]
+      properties:
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+        status:
+          $ref: '#/components/schemas/OfferStatus'
+        tariffType:
+          $ref: '#/components/schemas/TariffType'
+        speedMbps:
+          type: integer
+        discountPercent:
+          type: string
+          example: '10.00'
+        priceRub:
+          type: string
+          example: '1200000.00'
+        termMonths:
+          type: integer
+        contractType:
+          $ref: '#/components/schemas/ContractType'
+    RequestView:
+      type: object
+      required: [id, number, companyId, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          example: REQ-2026-000001
+        companyId:
+          type: string
+          format: uuid
+        companyName:
+          type: string
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        previousStatus:
+          $ref: '#/components/schemas/RequestStatus'
+        statusChangedAt:
+          type: string
+          format: date-time
+        integrationError:
+          type: boolean
+        commitmentLevel:
+          type: integer
+        version:
+          type: integer
+          format: int64
+        createdBy:
+          type: string
+          format: uuid
+        managerId:
+          type: string
+          format: uuid
+          description: Не отдаётся клиенту
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+        address:
+          type: string
+        requestedSpeedMbps:
+          type: integer
+        desiredDate:
+          type: string
+          format: date
+        contactName:
+          type: string
+        contactPhone:
+          type: string
+        contractPreference:
+          $ref: '#/components/schemas/ContractType'
+        clientComment:
+          type: string
+        segment:
+          type: string
+        isGovCustomer:
+          type: boolean
+        debtAmount:
+          type: string
+          description: Не отдаётся клиенту
+        crmManagerId:
+          type: string
+          format: uuid
+          description: Не отдаётся клиенту
+        selectedOfferId:
+          type: string
+          format: uuid
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceOfferView'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+    RequestPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    AuditEntry:
+      type: object
+      required: [id, action, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+        actorId:
+          type: string
+          format: uuid
+        actorRole:
+          $ref: '#/components/schemas/Role'
+        companyId:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          example: REQUEST_SUBMITTED
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        fromStatus:
+          type: string
+        toStatus:
+          type: string
+        comment:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    AuditEntryPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    CompanyStatus:
+      type: string
+      enum: [PENDING, ACTIVE, REJECTED]
+    RequestStatus:
+      type: string
+      enum:
+        - DRAFT
+        - DATA_CHECK
+        - WITH_MANAGER
+        - TECH_CHECK
+        - IN_APPROVAL
+        - REWORK
+        - CONTRACT_SIGNING
+        - IN_EXECUTION
+        - ACTIVATED
+        - CANCEL_REQUESTED
+        - CLOSED
+        - REJECTED
+        - CANCELLED
+    OfferStatus:
+      type: string
+      enum: [PROPOSED, SELECTED, DECLINED]
+    TariffType:
+      type: string
+      enum: [STANDARD, INDIVIDUAL]
+    ContractType:
+      type: string
+      enum: [OFFER, STANDARD, CLIENT_FORM]
+    Role:
+      type: string
+      enum:
+        - CLIENT_OWNER
+        - CLIENT_ADMIN
+        - CLIENT_REQUESTER
+        - SALES_MANAGER
+        - TECH_SPECIALIST
+        - LAWYER
+        - FINANCE_CONTROLLER
+        - PROCUREMENT_SPECIALIST
+        - B2B_HEAD
+        - ENGINEER
+        - COORDINATOR
+        - ADMIN
