@@ -46,4 +46,4 @@
 
 ## Состояние
 
-Незаполненные документы: `business/ui-requirements.md`, `system/notifications.md`. Кто за что отвечает — [team.md](team.md), раздел «Владельцы документов системной аналитики»; что это значит для покрытия ТЗ — [tz-coverage.md](tz-coverage.md), раздел 5.
+Незаполненные документы: `system/notifications.md`. Кто за что отвечает — [team.md](team.md), раздел «Владельцы документов системной аналитики»; что это значит для покрытия ТЗ — [tz-coverage.md](tz-coverage.md), раздел 5.
