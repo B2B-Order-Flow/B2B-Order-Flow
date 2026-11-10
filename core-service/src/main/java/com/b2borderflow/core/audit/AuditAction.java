@@ -1,0 +1,20 @@
+package com.b2borderflow.core.audit;
+
+/** Машинные имена действий аудита. Новые действия добавляются без миграции. */
+public enum AuditAction {
+    USER_REGISTERED,
+    COMPANY_REGISTERED,
+    COMPANY_CONFIRMED,
+    COMPANY_REJECTED,
+    REQUEST_CREATED,
+    REQUEST_UPDATED,
+    REQUEST_DELETED,
+    REQUEST_SUBMITTED,
+    REQUEST_DATA_CHECK_FAILED,
+    REQUEST_DATA_CHECK_COMPLETED,
+    REQUEST_DATA_RECHECKED,
+    REQUEST_MANAGER_CLAIMED,
+    REQUEST_MANAGER_ASSIGNED,
+    REQUEST_MANAGER_REASSIGNED,
+    ACCESS_DENIED
+}
