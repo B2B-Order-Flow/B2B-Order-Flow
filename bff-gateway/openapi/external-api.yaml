@@ -16,6 +16,8 @@ paths:
   /api/v1/companies:
     post:
       operationId: registerCompany
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey'}]
       requestBody:
         required: true
         content: {application/json: {schema: {type: object, additionalProperties: true}}}
@@ -23,10 +25,12 @@ paths:
   /api/v1/requests:
     get:
       operationId: listRequests
-      parameters: [{ $ref: '#/components/parameters/CorrelationId'}, { $ref: '#/components/parameters/ActiveRole'}]
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/CorrelationId'}, { $ref: '#/components/parameters/ActiveRole'}, { $ref: '#/components/parameters/Page'}, { $ref: '#/components/parameters/Size'}, { $ref: '#/components/parameters/Sort'}]
       responses: {'200': {description: Request list}}
     post:
       operationId: createRequest
+      security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/CorrelationId'}, { $ref: '#/components/parameters/IdempotencyKey'}]
       requestBody:
         required: true
@@ -35,29 +39,52 @@ paths:
   /api/v1/requests/{requestId}:
     get:
       operationId: getRequest
+      security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/RequestId'}]
       responses: {'200': {description: Request card}, '404': { $ref: '#/components/responses/Problem'}}
   /api/v1/requests/{requestId}/submit:
     post:
       operationId: submitRequest
+      security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
       responses: {'200': {description: Submitted}, '409': { $ref: '#/components/responses/Problem'}}
   /api/v1/requests/{requestId}/claim:
     post:
       operationId: claimRequest
+      security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/RequestId'}, { $ref: '#/components/parameters/ActiveRole'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
       responses: {'200': {description: Claimed}, '409': { $ref: '#/components/responses/Problem'}}
   /api/v1/requests/{requestId}/assign-manager:
     post:
       operationId: assignManager
+      security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/RequestId'}, { $ref: '#/components/parameters/ActiveRole'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssignManagerCommand'}}}}
       responses: {'200': {description: Manager assigned}, '409': { $ref: '#/components/responses/Problem'}}
 components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  schemas:
+    VersionCommand:
+      type: object
+      required: [version]
+      properties: {version: {type: integer, minimum: 0}}
+    AssignManagerCommand:
+      type: object
+      required: [version, managerId]
+      properties:
+        version: {type: integer, minimum: 0}
+        managerId: {type: string, format: uuid}
   parameters:
     CorrelationId: {name: X-Correlation-Id, in: header, required: false, schema: {type: string, maxLength: 100}}
     ActiveRole: {name: X-Active-Role, in: header, required: false, schema: {type: string, maxLength: 50}}
     IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 100}}
     RequestId: {name: requestId, in: path, required: true, schema: {type: string, format: uuid}}
+    Page: {name: page, in: query, required: false, schema: {type: integer, minimum: 0, default: 0}}
+    Size: {name: size, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    Sort: {name: sort, in: query, required: false, schema: {type: string, maxLength: 100}}
   responses:
     Problem:
       description: RFC 9457 problem

@@ -1,20 +1,34 @@
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from .headers import correlation_id_context
 
-def problem(status: int, code: str, detail: str, correlation_id: str, retryable: bool = False) -> JSONResponse:
+
+def problem(
+    status: int,
+    code: str,
+    detail: str,
+    correlation_id: str,
+    retryable: bool = False,
+    violations: list[dict] | None = None,
+) -> JSONResponse:
+    slug = code.lower().replace("_", "-")
+    content = {
+        "type": f"https://b2b-order-flow/errors/{slug}",
+        "title": detail,
+        "status": status,
+        "detail": detail,
+        "code": code,
+        "retryable": retryable,
+        "correlationId": correlation_id,
+    }
+    if violations is not None:
+        content["violations"] = violations
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
-        content={
-            "type": f"https://b2b-order-flow/errors/{code.lower()}",
-            "title": detail,
-            "status": status,
-            "detail": detail,
-            "code": code,
-            "retryable": retryable,
-            "correlationId": correlation_id,
-        },
+        content=content,
     )
 
 
@@ -31,6 +45,20 @@ async def core_client_error_handler(_: Request, exc: CoreClientError) -> JSONRes
     return problem(exc.status, exc.code, exc.detail, exc.correlation_id, exc.retryable)
 
 
-async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    correlation_id = request.headers.get("X-Correlation-Id", "unknown")
-    return problem(422, "VALIDATION_ERROR", str(exc), correlation_id, False)
+async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    violations = [
+        {"field": ".".join(str(part) for part in error["loc"]), "code": error["type"], "message": error["msg"]}
+        for error in exc.errors()
+    ]
+    return problem(
+        422,
+        "VALIDATION_FAILED",
+        "Параметры запроса не прошли проверку",
+        correlation_id_context.get(),
+        False,
+        violations,
+    )
+
+
+async def internal_error_handler(_: Request, __: Exception) -> JSONResponse:
+    return problem(500, "INTERNAL_ERROR", "Внутренняя ошибка сервиса", correlation_id_context.get(), False)

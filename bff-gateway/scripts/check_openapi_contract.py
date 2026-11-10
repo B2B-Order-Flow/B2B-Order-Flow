@@ -6,9 +6,9 @@ from pathlib import Path
 import yaml
 
 
-def operations(document: dict) -> set[tuple[str, str]]:
+def operations(document: dict, public: bool = False) -> set[tuple[str, str]]:
     return {
-        (path, method)
+        (path.replace("/api/v1/", "/internal/v1/", 1) if public else path, method)
         for path, item in document.get("paths", {}).items()
         for method in item
         if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
@@ -29,7 +29,7 @@ def main() -> int:
     with args.core.open(encoding="utf-8") as file:
         core = yaml.safe_load(file)
 
-    missing = operations(bff) - operations(core)
+    missing = operations(bff, public=True) - operations(core)
     if missing:
         print("BFF operations missing from core contract:")
         for path, method in sorted(missing):
