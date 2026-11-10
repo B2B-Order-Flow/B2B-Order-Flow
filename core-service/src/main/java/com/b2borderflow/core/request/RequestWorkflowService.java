@@ -140,13 +140,15 @@ public class RequestWorkflowService {
 
     /**
      * Транзакция 2: сохраняет результаты проверок, выполняет T02 или T03/T03b.
-     * Если все три системы ответили, заявка идёт дальше; иначе остаётся в DATA_CHECK
-     * с флагом {@code integrationError} (EC-10).
+     * Переходы T02/T03/T03b выполняет системный актор, поэтому метод не требует
+     * HTTP-контекста и пригоден для фонового повтора EC-10. {@code viewer} нужен
+     * только для представления ответа; в фоне передаётся {@code null}.
      */
     @Transactional
     public RequestView completeSubmission(UUID requestId,
                                           Map<ExternalSystem, ExternalCallResult<?>> results,
-                                          boolean recheck) {
+                                          boolean recheck,
+                                          CurrentUser viewer) {
         Request request = loadExisting(requestId);
         if (request.getStatus() != RequestStatus.DATA_CHECK) {
             throw ApiException.illegalTransition(
@@ -178,7 +180,6 @@ public class RequestWorkflowService {
                 latestSuccessfulPayloads(requestId);
         ExternalData data = externalData(successfulPayloads);
 
-        CurrentUser actor = currentUserProvider.current();
         List<Warning> warnings = List.of();
 
         if (allChecked) {
@@ -186,10 +187,13 @@ public class RequestWorkflowService {
             request.setIntegrationError(false);
             requestRepository.saveAndFlush(request);
 
-            auditService.record(actor, request.getCompanyId(), requestId,
+            Map<String, Object> checkDetails = new HashMap<>();
+            checkDetails.put("systems", ExternalSystem.values().length);
+            checkDetails.put("actor", "SYSTEM");
+            auditService.recordSystem(request.getCompanyId(), requestId,
                     AuditAction.REQUEST_DATA_CHECK_COMPLETED,
                     "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.DATA_CHECK.name(),
-                    null, Map.of("systems", ExternalSystem.values().length));
+                    null, checkDetails);
 
             if (request.getManagerId() == null && data.managerId() != null) {
                 request.setManagerId(data.managerId());
@@ -200,7 +204,8 @@ public class RequestWorkflowService {
                 Map<String, Object> details = new HashMap<>();
                 details.put("managerId", data.managerId());
                 details.put("source", "CRM");
-                auditService.record(actor, request.getCompanyId(), requestId,
+                details.put("actor", "SYSTEM");
+                auditService.recordSystem(request.getCompanyId(), requestId,
                         AuditAction.REQUEST_MANAGER_ASSIGNED,
                         "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.WITH_MANAGER.name(),
                         null, details);
@@ -213,7 +218,8 @@ public class RequestWorkflowService {
             Map<String, Object> details = new HashMap<>();
             details.put("successfulSystems", successfulSystems);
             details.put("failedSystems", failedSystems(results));
-            auditService.record(actor, request.getCompanyId(), requestId,
+            details.put("actor", "SYSTEM");
+            auditService.recordSystem(request.getCompanyId(), requestId,
                     AuditAction.REQUEST_DATA_CHECK_FAILED,
                     "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.DATA_CHECK.name(),
                     null, details);
@@ -224,16 +230,23 @@ public class RequestWorkflowService {
             Map<String, Object> details = new HashMap<>();
             details.put("successfulSystems", successfulSystems);
             details.put("recheckedSystems", results.keySet().stream().map(Enum::name).toList());
-            auditService.record(actor, request.getCompanyId(), requestId,
-                    AuditAction.REQUEST_DATA_RECHECKED,
-                    "REQUEST", requestId, request.getStatus().name(), request.getStatus().name(),
-                    null, details);
+            if (viewer == null) {
+                auditService.recordSystem(request.getCompanyId(), requestId,
+                        AuditAction.REQUEST_DATA_RECHECKED,
+                        "REQUEST", requestId, request.getStatus().name(), request.getStatus().name(),
+                        null, details);
+            } else {
+                auditService.record(viewer, request.getCompanyId(), requestId,
+                        AuditAction.REQUEST_DATA_RECHECKED,
+                        "REQUEST", requestId, request.getStatus().name(), request.getStatus().name(),
+                        null, details);
+            }
         }
 
         log.info("Проверка данных завершена: requestId={}, status={}, integrationError={}, successfulSystems={}",
                 requestId, request.getStatus(), request.isIntegrationError(), successfulSystems);
 
-        return viewFactory.toView(request, actor, warnings);
+        return viewFactory.toView(request, viewer, warnings);
     }
 
     /** T03b: менеджер берёт заявку из очереди. */

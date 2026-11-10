@@ -34,6 +34,7 @@ class RequestSubmissionIntegrationTest extends AbstractIntegrationTest {
         assertThat(created.body().get("status")).isEqualTo("DRAFT");
         assertThat(created.body().get("companyId")).isEqualTo(company.getId().toString());
         assertThat(created.body().get("number")).asString().matches("REQ-\\d{4}-\\d{6}");
+        assertThat(created.body().get("routeVersion")).isEqualTo(0);
         assertThat(created.body().get("selectedOfferId")).isNotNull();
         assertThat(offers(created)).hasSize(1);
         assertThat(offers(created).get(0).get("status")).isEqualTo("SELECTED");
@@ -82,6 +83,17 @@ class RequestSubmissionIntegrationTest extends AbstractIntegrationTest {
                 "REQUEST_SUBMITTED",
                 "REQUEST_DATA_CHECK_COMPLETED",
                 "REQUEST_MANAGER_ASSIGNED");
+
+        // T01 — действие клиента, T03/T03b — системный актор.
+        assertThat(jdbc.queryForObject(
+                "select actor_id from audit_log where request_id = ? and action = 'REQUEST_SUBMITTED'",
+                UUID.class, requestId)).isEqualTo(client.getId());
+        assertThat(jdbc.queryForObject(
+                "select actor_id from audit_log where request_id = ? and action = 'REQUEST_DATA_CHECK_COMPLETED'",
+                UUID.class, requestId)).isNull();
+        assertThat(jdbc.queryForObject(
+                "select actor_id from audit_log where request_id = ? and action = 'REQUEST_MANAGER_ASSIGNED'",
+                UUID.class, requestId)).isNull();
 
         // Клиентская карточка не содержит исполнителя и внутренних сумм.
         ApiResponse clientView = get("/internal/v1/requests/" + requestId, token, Role.CLIENT_OWNER);
@@ -190,6 +202,9 @@ class RequestSubmissionIntegrationTest extends AbstractIntegrationTest {
         assertThat(auditRows(requestId).stream().map(row -> row.get("action")))
                 .containsSubsequence("REQUEST_SUBMITTED", "REQUEST_DATA_CHECK_FAILED")
                 .doesNotContain("REQUEST_MANAGER_ASSIGNED");
+        assertThat(jdbc.queryForObject(
+                "select actor_id from audit_log where request_id = ? and action = 'REQUEST_DATA_CHECK_FAILED'",
+                UUID.class, requestId)).isNull();
 
         // Координатор повторяет проверку после восстановления CRM.
         EXTERNAL_MOCKS.resetAll();

@@ -21,6 +21,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -102,6 +103,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
     public ResponseEntity<ProblemDetail> handleNoResource(Exception ex, HttpServletRequest request) {
         return response(ErrorCode.NOT_FOUND, "Запрошенный ресурс не найден", List.of(), request);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex,
+                                                                HttpServletRequest request) {
+        return response(ErrorCode.METHOD_NOT_ALLOWED,
+                "Для этого ресурса метод " + ex.getMethod() + " не поддерживается", List.of(), request);
     }
 
     @ExceptionHandler({ObjectOptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class})

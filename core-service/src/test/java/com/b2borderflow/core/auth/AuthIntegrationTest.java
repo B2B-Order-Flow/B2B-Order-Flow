@@ -78,4 +78,12 @@ class AuthIntegrationTest extends AbstractIntegrationTest {
         assertThat(foreignRole.status()).isEqualTo(403);
         assertThat(foreignRole.body().get("code")).isEqualTo("ACCESS_DENIED");
     }
+
+    @Test
+    void unsupportedMethodIsProblemWithMethodNotAllowedCode() {
+        ApiResponse response = request(HttpMethod.GET, "/internal/v1/auth/login", internalHeaders(), null);
+        assertThat(response.status()).isEqualTo(405);
+        assertThat(response.body().get("code")).isEqualTo("METHOD_NOT_ALLOWED");
+        assertThat(response.body().get("correlationId")).isNotNull();
+    }
 }
