@@ -75,4 +75,3 @@ async def test_timeout_becomes_core_timeout(monkeypatch):
 
     assert error.value.status == 504
     assert error.value.code == "CORE_TIMEOUT"
-

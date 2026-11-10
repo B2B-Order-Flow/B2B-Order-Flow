@@ -45,4 +45,3 @@ async def test_create_request_proxies_headers_and_body(client):
     assert response.status_code == 201
     assert response.json() == {"id": "request-1"}
     assert response.headers["x-correlation-id"] == "client-correlation"
-
