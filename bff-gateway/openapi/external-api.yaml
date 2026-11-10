@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: B2B Order Flow External API
+  version: 0.1.0
+  description: Public UI-facing contract. Business rules and authorization are enforced by core-service.
+servers:
+  - url: /
+paths:
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, additionalProperties: true}}}
+      responses: {'200': {description: Successful login}, '401': { $ref: '#/components/responses/Problem'}}
+  /api/v1/companies:
+    post:
+      operationId: registerCompany
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, additionalProperties: true}}}
+      responses: {'201': {description: Company registered}, '400': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests:
+    get:
+      operationId: listRequests
+      parameters: [{ $ref: '#/components/parameters/CorrelationId'}, { $ref: '#/components/parameters/ActiveRole'}]
+      responses: {'200': {description: Request list}}
+    post:
+      operationId: createRequest
+      parameters: [{ $ref: '#/components/parameters/CorrelationId'}, { $ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, additionalProperties: true}}}
+      responses: {'201': {description: Draft created}, '422': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests/{requestId}:
+    get:
+      operationId: getRequest
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      responses: {'200': {description: Request card}, '404': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests/{requestId}/submit:
+    post:
+      operationId: submitRequest
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      responses: {'200': {description: Submitted}, '409': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests/{requestId}/claim:
+    post:
+      operationId: claimRequest
+      parameters: [{ $ref: '#/components/parameters/RequestId'}, { $ref: '#/components/parameters/ActiveRole'}]
+      responses: {'200': {description: Claimed}, '409': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests/{requestId}/assign-manager:
+    post:
+      operationId: assignManager
+      parameters: [{ $ref: '#/components/parameters/RequestId'}, { $ref: '#/components/parameters/ActiveRole'}]
+      responses: {'200': {description: Manager assigned}, '409': { $ref: '#/components/responses/Problem'}}
+components:
+  parameters:
+    CorrelationId: {name: X-Correlation-Id, in: header, required: false, schema: {type: string, maxLength: 100}}
+    ActiveRole: {name: X-Active-Role, in: header, required: false, schema: {type: string, maxLength: 50}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 100}}
+    RequestId: {name: requestId, in: path, required: true, schema: {type: string, format: uuid}}
+  responses:
+    Problem:
+      description: RFC 9457 problem
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [code, retryable, correlationId]
+            properties:
+              type: {type: string}
+              title: {type: string}
+              status: {type: integer}
+              detail: {type: string}
+              code: {type: string}
+              retryable: {type: boolean}
+              correlationId: {type: string}
+
