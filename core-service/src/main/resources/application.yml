@@ -14,8 +14,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    user: ${CORE_DB_MIGRATION_USER:${CORE_DB_APP_USER:core_app}}
-    password: ${CORE_DB_MIGRATION_PASSWORD:${CORE_DB_APP_PASSWORD:}}
+    # Миграционный пользователь обязателен: откат на пользователя приложения
+    # сделал бы его владельцем схемы и лишил смысла ограничения audit_log.
+    user: ${CORE_DB_MIGRATION_USER}
+    password: ${CORE_DB_MIGRATION_PASSWORD}
     placeholders:
       app-user: ${CORE_DB_APP_USER:core_app}
 
