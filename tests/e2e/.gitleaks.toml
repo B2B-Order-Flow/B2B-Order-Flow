@@ -1,0 +1,13 @@
+
+title = "B2B-Order-Flow gitleaks"
+
+[extend]
+
+useDefault = true
+
+[allowlist]
+
+description = "Тестовое значение для JUnit-тестов ядра, не настоящий секрет"
+
+paths = ['''core-service/src/test/resources/application-test\.yml''']
+
