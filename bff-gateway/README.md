@@ -19,7 +19,11 @@ uvicorn app.main:app --reload --port 8000
 pip install -r requirements-dev.txt
 ruff check .
 ruff format --check .
+python scripts/check_openapi_contract.py --core ../core-service/src/main/resources/openapi/core-api.yaml
 ```
+
+Проверка OpenAPI запускается после появления внутреннего контракта ядра. Она завершается
+ошибкой, если операция из внешнего контракта BFF отсутствует в контракте `core-service`.
 
 Основные настройки задаются через переменные окружения: `CORE_URL`, `INTERNAL_TOKEN`,
 `CORE_HTTP_TIMEOUT_SECONDS` и `CORE_HTTP_CONNECT_TIMEOUT_SECONDS`.
