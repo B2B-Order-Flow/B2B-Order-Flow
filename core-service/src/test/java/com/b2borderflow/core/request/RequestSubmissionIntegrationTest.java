@@ -97,6 +97,40 @@ class RequestSubmissionIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void clientCanEditDraftAndReadHistoryAndList() {
+        AppUser client = createUser("client.owner", "Клиент Владелец");
+        createCompany("ООО «Логистик Плюс»", INN, CompanyStatus.ACTIVE, client);
+        String token = login("client.owner");
+
+        ApiResponse created = post("/internal/v1/requests", token, Role.CLIENT_OWNER, requestPayload());
+        UUID requestId = UUID.fromString((String) created.body().get("id"));
+
+        java.util.Map<String, Object> update = new java.util.LinkedHashMap<>(requestPayload());
+        update.put("address", "г. Екатеринбург, ул. Мира, 25");
+        update.put("version", number(created.body().get("version")));
+        ApiResponse updated = request(HttpMethod.PATCH, "/internal/v1/requests/" + requestId,
+                authorizedHeaders(token, Role.CLIENT_OWNER), update);
+
+        assertThat(updated.status()).isEqualTo(200);
+        assertThat(updated.body().get("status")).isEqualTo("DRAFT");
+        assertThat(updated.body().get("address")).isEqualTo("г. Екатеринбург, ул. Мира, 25");
+        assertThat(number(updated.body().get("version")))
+                .isGreaterThan(number(created.body().get("version")));
+
+        ApiResponse history = get("/internal/v1/requests/" + requestId + "/history",
+                token, Role.CLIENT_OWNER);
+        assertThat(history.status()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> historyContent = (List<Map<String, Object>>) history.body().get("content");
+        assertThat(historyContent).extracting(item -> item.get("action"))
+                .containsExactly("REQUEST_CREATED", "REQUEST_UPDATED");
+
+        ApiResponse list = get("/internal/v1/requests", token, Role.CLIENT_OWNER);
+        assertThat(list.status()).isEqualTo(200);
+        assertThat((List<?>) list.body().get("content")).hasSize(1);
+    }
+
+    @Test
     void retriesMakeFlakyCrmSuccessful() {
         AppUser client = createUser("client.owner", "Клиент Владелец");
         createCompany("ООО «Логистик Плюс»", INN, CompanyStatus.ACTIVE, client);
