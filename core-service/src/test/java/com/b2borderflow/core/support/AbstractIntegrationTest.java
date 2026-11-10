@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
@@ -57,6 +56,13 @@ import tools.jackson.databind.ObjectMapper;
 public abstract class AbstractIntegrationTest {
 
     protected static final String PASSWORD = "password123";
+    protected static final String TEST_INTERNAL_TOKEN = "test-internal-token";
+
+    /**
+     * Тестовый JWT-секрет генерируется во время запуска и не хранится в исходниках:
+     * gitleaks не должен находить в репозитории даже тестовый секрет.
+     */
+    private static final String TEST_JWT_SECRET = UUID.randomUUID() + "-" + UUID.randomUUID();
 
     protected static final PostgreSQLContainer POSTGRES;
     protected static final WireMockServer EXTERNAL_MOCKS;
@@ -85,6 +91,8 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);
         registry.add("spring.flyway.placeholders.app-user", POSTGRES::getUsername);
+        registry.add("app.security.jwt-secret", () -> TEST_JWT_SECRET);
+        registry.add("app.security.internal-token", () -> TEST_INTERNAL_TOKEN);
         registry.add("app.integration.crm-url", () -> "http://localhost:" + EXTERNAL_MOCKS.port());
         registry.add("app.integration.billing-url", () -> "http://localhost:" + EXTERNAL_MOCKS.port());
         registry.add("app.integration.registry-url", () -> "http://localhost:" + EXTERNAL_MOCKS.port());
@@ -117,8 +125,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected OperatorRoleRepository operatorRoleRepository;
 
-    @Value("${app.security.internal-token}")
-    protected String internalToken;
+    protected String internalToken = TEST_INTERNAL_TOKEN;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))

@@ -8,12 +8,6 @@ spring:
   jackson:
     default-property-inclusion: non_null
 
-app:
-  security:
-    jwt-secret: test-jwt-secret-0123456789-0123456789-0123456789
-    internal-token: test-internal-token
-    jwt-ttl: 8h
-
 logging:
   level:
     root: WARN
