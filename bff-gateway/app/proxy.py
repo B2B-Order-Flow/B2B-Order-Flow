@@ -27,4 +27,3 @@ async def proxy(
     )
     content_type = upstream.headers.get("content-type", "application/json")
     return Response(content=upstream.content, status_code=upstream.status_code, media_type=content_type.split(";")[0])
-

@@ -43,4 +43,3 @@ class CoreClient:
         if isinstance(last_error, httpx.TimeoutException):
             raise CoreClientError(504, "CORE_TIMEOUT", "Ядро не ответило вовремя", correlation_id) from last_error
         raise CoreClientError(503, "CORE_UNAVAILABLE", "Ядро временно недоступно", correlation_id) from last_error
-

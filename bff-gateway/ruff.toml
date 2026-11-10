@@ -2,6 +2,8 @@
 line-length = 120
 
 [lint]
+ignore = ["B008"]
+
 select = [
     "E", # стиль pycodestyle
     "F", # ошибки pyflakes: неиспользуемые импорты и переменные

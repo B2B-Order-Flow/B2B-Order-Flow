@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, Request
 from .config import Settings, get_settings
 from .core_client import CoreClient
 from .errors import CoreClientError, core_client_error_handler
-from .headers import correlation_middleware, correlation_id_context
+from .headers import correlation_id_context, correlation_middleware
 from .proxy import proxy
 
 app = FastAPI(title="B2B Order Flow BFF", version="0.1.0")
@@ -59,5 +59,6 @@ async def claim_request(request_id: str, request: Request, client: CoreClient = 
 
 @app.api_route("/api/v1/requests/{request_id}/assign-manager", methods=["POST"])
 async def assign_manager(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await proxy(request, client, "POST", f"/api/v1/requests/{request_id}/assign-manager", body=await request.json())
-
+    return await proxy(
+        request, client, "POST", f"/api/v1/requests/{request_id}/assign-manager", body=await request.json()
+    )

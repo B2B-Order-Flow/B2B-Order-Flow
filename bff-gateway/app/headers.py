@@ -12,4 +12,3 @@ async def correlation_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Correlation-Id"] = correlation_id
     return response
-

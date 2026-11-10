@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -36,4 +34,3 @@ async def core_client_error_handler(_: Request, exc: CoreClientError) -> JSONRes
 async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     correlation_id = request.headers.get("X-Correlation-Id", "unknown")
     return problem(422, "VALIDATION_ERROR", str(exc), correlation_id, False)
-
