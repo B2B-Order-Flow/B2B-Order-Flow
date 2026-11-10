@@ -1,0 +1,20 @@
+spring:
+  flyway:
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  jackson:
+    default-property-inclusion: non_null
+
+app:
+  security:
+    jwt-secret: test-jwt-secret-0123456789-0123456789-0123456789
+    internal-token: test-internal-token
+    jwt-ttl: 8h
+
+logging:
+  level:
+    root: WARN
+    com.b2borderflow: INFO
