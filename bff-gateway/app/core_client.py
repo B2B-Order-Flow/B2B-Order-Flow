@@ -9,8 +9,9 @@ from .errors import CoreClientError
 
 
 class CoreClient:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.settings = settings
+        self.transport = transport
 
     async def request(
         self,
@@ -29,7 +30,9 @@ class CoreClient:
             request_headers.update(headers)
         attempts = 2 if method.upper() == "GET" else 1
         last_error: Exception | None = None
-        async with httpx.AsyncClient(base_url=self.settings.core_url, timeout=timeout) as client:
+        async with httpx.AsyncClient(
+            base_url=self.settings.core_url, timeout=timeout, transport=self.transport
+        ) as client:
             for attempt in range(attempts):
                 try:
                     return await client.request(method, path, headers=request_headers, **kwargs)
@@ -39,7 +42,8 @@ class CoreClient:
                         await asyncio.sleep(0.3)
                 except httpx.RequestError as exc:
                     last_error = exc
-                    break
+                    if attempt + 1 < attempts:
+                        await asyncio.sleep(0.3)
         if isinstance(last_error, httpx.TimeoutException):
             raise CoreClientError(504, "CORE_TIMEOUT", "Ядро не ответило вовремя", correlation_id) from last_error
         raise CoreClientError(503, "CORE_UNAVAILABLE", "Ядро временно недоступно", correlation_id) from last_error

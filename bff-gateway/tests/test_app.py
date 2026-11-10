@@ -19,13 +19,10 @@ def client():
     transport = httpx.MockTransport(handler)
 
     async def override() -> CoreClient:
-        return CoreClient(Settings(core_url="http://core.test", internal_token="test-token"))
+        return CoreClient(Settings(core_url="http://core.test", internal_token="test-token"), transport=transport)
 
     app.dependency_overrides[get_core_client] = override
-    original_client = httpx.AsyncClient
-    httpx.AsyncClient = lambda **_: original_client(transport=transport)
     yield ASGITransport(app=app)
-    httpx.AsyncClient = original_client
     app.dependency_overrides.clear()
 
 
