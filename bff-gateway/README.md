@@ -13,6 +13,14 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+Проверки перед PR:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+ruff format --check .
+```
+
 Основные настройки задаются через переменные окружения: `CORE_URL`, `INTERNAL_TOKEN`,
 `CORE_HTTP_TIMEOUT_SECONDS` и `CORE_HTTP_CONNECT_TIMEOUT_SECONDS`.
 
