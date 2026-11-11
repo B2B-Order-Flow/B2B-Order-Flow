@@ -1,7 +1,7 @@
 # Запуск (из корня репозитория):
 #   cp .env.example .env   # и заменить change_me
-#   docker compose --env-file .env -f infra/compose.yaml up -d
-# Сейчас в составе БД и три мока. Nginx, BFF, ядро и UI добавятся отдельными PR,
+#   docker compose --env-file .env -f infra/compose.yaml up -d --build
+# Сейчас в составе БД, три мока, ядро и BFF. Nginx и UI добавятся отдельными PR,
 # когда у сервисов появятся образы.
 name: b2b-order-flow
 
@@ -51,6 +51,62 @@ services:
       WIREMOCK_OPTIONS: "--global-response-templating --disable-gzip --max-request-journal-entries 1000"
     volumes:
       - ../mocks/registry:/home/wiremock:ro
+
+  core-service:
+    build:
+      context: ../core-service
+    restart: unless-stopped
+    # Порядок запуска по nfr.md: БД и моки, затем ядро. depends_on влияет только на старт:
+    # если мок упадёт позже, ядро продолжит работать (EC-10). У WireMock проверка встроена в образ.
+    depends_on:
+      core-db:
+        condition: service_healthy
+      mock-crm:
+        condition: service_healthy
+      mock-billing:
+        condition: service_healthy
+      mock-registry:
+        condition: service_healthy
+    environment:
+      CORE_DB_URL: jdbc:postgresql://core-db:5432/${CORE_DB_NAME:?задай CORE_DB_NAME в .env}
+      CORE_DB_APP_USER: ${CORE_DB_APP_USER:?задай CORE_DB_APP_USER в .env}
+      CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?задай CORE_DB_APP_PASSWORD в .env}
+      CORE_DB_MIGRATION_USER: ${CORE_DB_MIGRATION_USER:?задай CORE_DB_MIGRATION_USER в .env}
+      CORE_DB_MIGRATION_PASSWORD: ${CORE_DB_MIGRATION_PASSWORD:?задай CORE_DB_MIGRATION_PASSWORD в .env}
+      JWT_SECRET: ${JWT_SECRET:?задай JWT_SECRET в .env (не короче 32 символов)}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?задай INTERNAL_TOKEN в .env}
+      MOCK_CRM_URL: http://mock-crm:8080
+      MOCK_BILLING_URL: http://mock-billing:8080
+      MOCK_REGISTRY_URL: http://mock-registry:8080
+      SLA_PROFILE: ${SLA_PROFILE:-PROD}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      # Первый запуск: сборка контекста Spring и миграции Flyway
+      start_period: 60s
+    # Ядро завершает запросы при остановке до 30 с (server.shutdown: graceful), по умолчанию Docker ждёт 10 с
+    stop_grace_period: 30s
+
+  bff-gateway:
+    build:
+      context: ../bff-gateway
+    restart: unless-stopped
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      CORE_URL: http://core-service:8080
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?задай INTERNAL_TOKEN в .env}
+    healthcheck:
+      # В python:slim нет curl, поэтому urllib. /health отвечает 200 и когда ядро недоступно
+      # (status: degraded), так что проверка показывает только, что процесс шлюза жив
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
 volumes:
   core-db-data:

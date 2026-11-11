@@ -1,0 +1,6 @@
+# Необязательный файл: открывает шлюз на localhost для отладки и сквозных тестов с хоста.
+# В базовом compose портов у шлюза нет, наружу будет открыт только Nginx (nfr.md, раздел 8):
+#   docker compose --env-file .env -f infra/compose.yaml -f infra/compose.app-ports.yaml up -d
+services:
+  bff-gateway:
+    ports: ["127.0.0.1:8000:8000"]
