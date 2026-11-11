@@ -1,8 +1,12 @@
 import json
+import logging
+import time
+from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from .config import Settings, get_settings
 from .core_client import CoreClient
@@ -10,11 +14,58 @@ from .errors import CoreClientError, core_client_error_handler, internal_error_h
 from .headers import correlation_id_context, correlation_middleware
 from .proxy import proxy
 
-app = FastAPI(title="B2B Order Flow BFF", version="0.1.0")
+logger = logging.getLogger("bff-gateway")
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"timestamp":"%(asctime)s","level":"%(levelname)s","service":"bff-gateway","message":"%(message)s"}',
+)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    get_settings()
+    yield
+
+
+app = FastAPI(
+    title="B2B Order Flow BFF",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.middleware("http")(correlation_middleware)
 app.add_exception_handler(CoreClientError, core_client_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, internal_error_handler)
+
+
+@app.middleware("http")
+async def access_log_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    logger.info(
+        "request method=%s path=%s status=%s durationMs=%d correlationId=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        (time.perf_counter() - started) * 1000,
+        correlation_id_context.get(),
+    )
+    return response
+
+
+@app.get("/api/v1/openapi.json", include_in_schema=False)
+async def openapi_json(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"code": "UNAUTHORIZED", "detail": "Требуется Bearer-токен", "retryable": False},
+            media_type="application/problem+json",
+            headers={"X-Correlation-Id": correlation_id_context.get()},
+        )
+    return JSONResponse(app.openapi())
 
 
 def get_core_client(settings: Settings = Depends(get_settings)) -> CoreClient:
@@ -38,7 +89,7 @@ async def health(client: CoreClient = Depends(get_core_client)) -> dict[str, Any
 
 async def read_body(request: Request) -> Any:
     if not await request.body():
-        return None
+        raise CoreClientError(400, "MALFORMED_REQUEST", "Тело запроса обязательно", correlation_id_context.get(), False)
     try:
         return await request.json()
     except (ValueError, json.JSONDecodeError) as exc:
@@ -52,9 +103,43 @@ async def login(request: Request, client: CoreClient = Depends(get_core_client))
     return await proxy(request, client, "POST", "/api/v1/auth/login", body=await read_body(request))
 
 
+@app.api_route("/api/v1/auth/register", methods=["POST"])
+async def register(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "POST", "/api/v1/auth/register", body=await read_body(request))
+
+
+@app.api_route("/api/v1/me", methods=["GET"])
+async def me(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/me")
+
+
 @app.api_route("/api/v1/companies", methods=["POST"])
 async def register_company(request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(request, client, "POST", "/api/v1/companies", body=await read_body(request))
+
+
+@app.api_route("/api/v1/companies/{company_id}", methods=["GET"])
+async def get_company(company_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/companies/{company_id}")
+
+
+@app.api_route("/api/v1/admin/companies", methods=["GET"])
+async def admin_companies(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/admin/companies")
+
+
+@app.api_route("/api/v1/admin/companies/{company_id}/confirm", methods=["POST"])
+async def confirm_company(company_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/admin/companies/{company_id}/confirm", body=await read_body(request)
+    )
+
+
+@app.api_route("/api/v1/admin/companies/{company_id}/reject", methods=["POST"])
+async def reject_company(company_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/admin/companies/{company_id}/reject", body=await read_body(request)
+    )
 
 
 @app.api_route("/api/v1/requests", methods=["GET", "POST"])
@@ -66,6 +151,24 @@ async def requests(request: Request, client: CoreClient = Depends(get_core_clien
 @app.api_route("/api/v1/requests/{request_id}", methods=["GET"])
 async def get_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}")
+
+
+@app.api_route("/api/v1/requests/{request_id}", methods=["PATCH", "DELETE"])
+async def mutate_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    body = await read_body(request) if request.method == "PATCH" else None
+    return await proxy(request, client, request.method, f"/api/v1/requests/{request_id}", body=body)
+
+
+@app.api_route("/api/v1/requests/{request_id}/recheck-data", methods=["POST"])
+async def recheck_data(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/requests/{request_id}/recheck-data", body=await read_body(request)
+    )
+
+
+@app.api_route("/api/v1/requests/{request_id}/history", methods=["GET"])
+async def request_history(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/history")
 
 
 @app.api_route("/api/v1/requests/{request_id}/submit", methods=["POST"])

@@ -29,10 +29,18 @@ def main() -> int:
     with args.core.open(encoding="utf-8") as file:
         core = yaml.safe_load(file)
 
-    missing = operations(bff, public=True) - operations(core)
-    if missing:
-        print("BFF operations missing from core contract:")
-        for path, method in sorted(missing):
+    bff_operations = operations(bff, public=True)
+    core_operations = operations(core)
+    missing_in_core = bff_operations - core_operations
+    missing_in_bff = core_operations - bff_operations
+    if missing_in_core or missing_in_bff:
+        if missing_in_core:
+            print("BFF operations missing from core contract:")
+        for path, method in sorted(missing_in_core):
+            print(f"  {method.upper():6} {path}")
+        if missing_in_bff:
+            print("Core operations missing from BFF contract:")
+        for path, method in sorted(missing_in_bff):
             print(f"  {method.upper():6} {path}")
         return 1
 

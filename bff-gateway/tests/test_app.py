@@ -48,3 +48,44 @@ async def test_create_request_proxies_headers_and_body(client):
     assert response.status_code == 201
     assert response.json() == {"id": "request-1"}
     assert response.headers["x-correlation-id"] == "client-correlation"
+
+
+@pytest.mark.asyncio
+async def test_empty_body_returns_problem(client):
+    async with httpx.AsyncClient(transport=client, base_url="http://test") as api:
+        response = await api.post("/api/v1/companies")
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "MALFORMED_REQUEST"
+    assert response.headers["x-correlation-id"]
+
+
+@pytest.mark.asyncio
+async def test_malformed_json_returns_problem(client):
+    async with httpx.AsyncClient(transport=client, base_url="http://test") as api:
+        response = await api.post("/api/v1/companies", content=b"{broken")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "MALFORMED_REQUEST"
+
+
+@pytest.mark.asyncio
+async def test_core_5xx_becomes_internal_error():
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(lambda _: httpx.Response(500, text="proxy error")),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            response = await api.get("/api/v1/me", headers={"X-Correlation-Id": "error-correlation"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "INTERNAL_ERROR"
+    assert response.headers["x-correlation-id"] == "error-correlation"

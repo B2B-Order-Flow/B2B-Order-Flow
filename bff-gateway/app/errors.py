@@ -28,6 +28,7 @@ def problem(
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
+        headers={"X-Correlation-Id": correlation_id},
         content=content,
     )
 

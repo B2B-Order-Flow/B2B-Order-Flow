@@ -36,4 +36,13 @@ async def proxy(
     if 500 <= upstream.status_code < 600 and upstream.status_code not in (503, 504):
         return problem(500, "INTERNAL_ERROR", "Внутренняя ошибка сервиса", correlation_id_context.get(), False)
     content_type = upstream.headers.get("content-type", "application/json")
-    return Response(content=upstream.content, status_code=upstream.status_code, media_type=content_type.split(";")[0])
+    response_headers = {
+        name: upstream.headers[name] for name in ("location", "x-correlation-id") if name in upstream.headers
+    }
+    response_headers.setdefault("X-Correlation-Id", correlation_id_context.get())
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=content_type.split(";")[0],
+        headers=response_headers,
+    )
