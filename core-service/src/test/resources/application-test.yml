@@ -1,0 +1,14 @@
+spring:
+  flyway:
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  jackson:
+    default-property-inclusion: non_null
+
+logging:
+  level:
+    root: WARN
+    com.b2borderflow: INFO
