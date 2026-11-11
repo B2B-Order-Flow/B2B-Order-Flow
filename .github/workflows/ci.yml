@@ -40,11 +40,40 @@ jobs:
             exit 1
           fi
 
-      - name: Compose-файл собирается (только mocks, затем с портами)
+      - name: Compose-файл собирается (базовый и с добавками)
         run: |
           cp .env.example .env
           docker compose --env-file .env -f infra/compose.yaml config -q
           docker compose --env-file .env -f infra/compose.yaml -f infra/compose.mocks-ports.yaml config -q
+          docker compose --env-file .env -f infra/compose.yaml -f infra/compose.app-ports.yaml config -q
+          docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml config -q
+
+  ui:
+    name: Тесты ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - run: npm ci
+
+      - name: Проверка типов
+        run: npm run typecheck
+
+      - name: Форматирование (Prettier)
+        run: npm run format:check
+
+      - name: Unit-тесты (Vitest)
+        run: npm test
 
   e2e:
     name: Тесты tests/e2e

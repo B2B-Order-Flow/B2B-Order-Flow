@@ -140,7 +140,7 @@ curl -H "X-Correlation-Id: test-1" "http://localhost:8081/crm/v1/customers?inn=7
 
 Контрактные тесты моков и заготовки сквозных сценариев лежат в [`tests/e2e/`](tests/e2e), запуск описан в его README. Команды запуска тестов сервисов появятся вместе с кодом.
 
-В CI (`.github/workflows/ci.yml`) сейчас работают поиск секретов (`gitleaks`), проверка JSON моков и `docker compose config`, а также тесты `tests/e2e`. Линтеры и сборка сервисов добавятся вместе с кодом.
+В CI (`.github/workflows/ci.yml`) сейчас работают поиск секретов (`gitleaks`), проверка JSON моков и `docker compose config`, а также тесты `tests/e2e` и проверки `ui` (типы, форматирование, unit-тесты). Линтеры и сборка ядра и шлюза добавятся отдельным PR.
 
 ## Документация
 
