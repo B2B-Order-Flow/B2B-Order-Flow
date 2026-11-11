@@ -7,11 +7,13 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from .config import Settings, get_settings
 from .core_client import CoreClient
 from .errors import CoreClientError, core_client_error_handler, internal_error_handler, validation_error_handler
 from .headers import correlation_id_context, correlation_middleware
+from .models import Command, CommercialTerms, DecisionCommand, TechResultCommand
 from .proxy import proxy
 
 logger = logging.getLogger("bff-gateway")
@@ -202,3 +204,141 @@ async def assign_manager(request_id: str, request: Request, client: CoreClient =
     return await proxy(
         request, client, "POST", f"/api/v1/requests/{request_id}/assign-manager", body=await read_body(request)
     )
+
+
+async def validated_body(request: Request, model: type[Command]):
+    try:
+        return model.model_validate(await read_body(request)).model_dump(mode="json", exclude_none=True)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+
+@app.post("/api/v1/requests/{request_id}/commercial-terms", operation_id="set_commercial_terms")
+async def commercial_terms(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request,
+        client,
+        "POST",
+        f"/api/v1/requests/{request_id}/commercial-terms",
+        body=await validated_body(request, CommercialTerms),
+    )
+
+
+@app.get("/api/v1/stages", operation_id="list_stages")
+async def list_stages(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/stages")
+
+
+@app.get("/api/v1/stages/my", operation_id="my_stages")
+async def my_stages(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/stages/my")
+
+
+@app.post("/api/v1/stages/{stage_id}/claim", operation_id="claim_stage")
+async def claim_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/stages/{stage_id}/claim", body=await validated_body(request, Command)
+    )
+
+
+@app.post("/api/v1/stages/{stage_id}/assign", operation_id="assign_stage")
+async def assign_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/stages/{stage_id}/assign", body=await validated_body(request, Command)
+    )
+
+
+@app.post("/api/v1/stages/{stage_id}/tech-result", operation_id="set_tech_result")
+async def tech_result(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request,
+        client,
+        "POST",
+        f"/api/v1/stages/{stage_id}/tech-result",
+        body=await validated_body(request, TechResultCommand),
+    )
+
+
+@app.post("/api/v1/stages/{stage_id}/decision", operation_id="stage_decision")
+async def stage_decision(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request,
+        client,
+        "POST",
+        f"/api/v1/stages/{stage_id}/decision",
+        body=await validated_body(request, DecisionCommand),
+    )
+
+
+@app.post("/api/v1/stages/{stage_id}/complete", operation_id="complete_stage")
+async def complete_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/stages/{stage_id}/complete", body=await validated_body(request, Command)
+    )
+
+
+@app.post("/api/v1/stages/{stage_id}/activate", operation_id="activate_stage")
+async def activate_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request, client, "POST", f"/api/v1/stages/{stage_id}/activate", body=await validated_body(request, Command)
+    )
+
+
+async def request_command(request: Request, client: CoreClient, path: str, model: type[Command] = Command):
+    return await proxy(request, client, "POST", path, body=await validated_body(request, model))
+
+
+@app.post("/api/v1/requests/{request_id}/contract/sent", operation_id="contract_sent")
+async def contract_sent(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/contract/sent")
+
+
+@app.post("/api/v1/requests/{request_id}/contract/concluded", operation_id="contract_concluded")
+async def contract_concluded(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/contract/concluded")
+
+
+@app.post("/api/v1/requests/{request_id}/contract/accept-offer", operation_id="accept_offer")
+async def accept_offer(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/contract/accept-offer")
+
+
+@app.post("/api/v1/requests/{request_id}/act/sent", operation_id="act_sent")
+async def act_sent(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/act/sent")
+
+
+@app.post("/api/v1/requests/{request_id}/act/signed", operation_id="act_signed")
+async def act_signed(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/act/signed")
+
+
+@app.post("/api/v1/requests/{request_id}/close-by-default", operation_id="close_by_default")
+async def close_by_default(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/close-by-default")
+
+
+@app.get("/api/v1/requests/{request_id}/sla", operation_id="request_sla")
+async def request_sla(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/sla")
+
+
+@app.get("/api/v1/notifications", operation_id="list_notifications")
+async def list_notifications(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/notifications")
+
+
+@app.post("/api/v1/notifications/{notification_id}/read", operation_id="read_notification")
+async def read_notification(notification_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(
+        request,
+        client,
+        "POST",
+        f"/api/v1/notifications/{notification_id}/read",
+        body=await validated_body(request, Command),
+    )
+
+
+@app.post("/api/v1/notifications/read-all", operation_id="read_all_notifications")
+async def read_all_notifications(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, "/api/v1/notifications/read-all")
