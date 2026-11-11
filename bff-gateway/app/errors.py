@@ -1,8 +1,14 @@
+from uuid import uuid4
+
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .headers import correlation_id_context
+
+
+def request_correlation_id(request: Request) -> str:
+    return correlation_id_context.get() or request.headers.get("X-Correlation-Id") or str(uuid4())
 
 
 def problem(
@@ -46,7 +52,7 @@ async def core_client_error_handler(_: Request, exc: CoreClientError) -> JSONRes
     return problem(exc.status, exc.code, exc.detail, exc.correlation_id, exc.retryable)
 
 
-async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     violations = [
         {"field": ".".join(str(part) for part in error["loc"]), "code": error["type"], "message": error["msg"]}
         for error in exc.errors()
@@ -55,11 +61,11 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
         422,
         "VALIDATION_FAILED",
         "Параметры запроса не прошли проверку",
-        correlation_id_context.get(),
+        request_correlation_id(request),
         False,
         violations,
     )
 
 
-async def internal_error_handler(_: Request, __: Exception) -> JSONResponse:
-    return problem(500, "INTERNAL_ERROR", "Внутренняя ошибка сервиса", correlation_id_context.get(), False)
+async def internal_error_handler(request: Request, __: Exception) -> JSONResponse:
+    return problem(500, "INTERNAL_ERROR", "Внутренняя ошибка сервиса", request_correlation_id(request), False)

@@ -89,3 +89,15 @@ async def test_core_5xx_becomes_internal_error():
     assert response.status_code == 500
     assert response.json()["code"] == "INTERNAL_ERROR"
     assert response.headers["x-correlation-id"] == "error-correlation"
+
+
+@pytest.mark.asyncio
+async def test_openapi_requires_bearer_header():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+        unauthorized = await api.get("/api/v1/openapi.json")
+        authorized = await api.get("/api/v1/openapi.json", headers={"Authorization": "Bearer test-jwt"})
+
+    assert unauthorized.status_code == 401
+    assert authorized.status_code == 200
+    assert "/api/v1/requests" in authorized.json()["paths"]

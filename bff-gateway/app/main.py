@@ -17,7 +17,7 @@ from .proxy import proxy
 logger = logging.getLogger("bff-gateway")
 logging.basicConfig(
     level=logging.INFO,
-    format='{"timestamp":"%(asctime)s","level":"%(levelname)s","service":"bff-gateway","message":"%(message)s"}',
+    format="%(message)s",
 )
 
 
@@ -46,12 +46,20 @@ async def access_log_middleware(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     logger.info(
-        "request method=%s path=%s status=%s durationMs=%d correlationId=%s",
-        request.method,
-        request.url.path,
-        response.status_code,
-        (time.perf_counter() - started) * 1000,
-        correlation_id_context.get(),
+        json.dumps(
+            {
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "level": "INFO",
+                "service": "bff-gateway",
+                "message": "request completed",
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "durationMs": round((time.perf_counter() - started) * 1000),
+                "correlationId": response.headers.get("X-Correlation-Id", ""),
+            },
+            ensure_ascii=False,
+        )
     )
     return response
 
@@ -142,10 +150,14 @@ async def reject_company(company_id: str, request: Request, client: CoreClient =
     )
 
 
-@app.api_route("/api/v1/requests", methods=["GET", "POST"])
-async def requests(request: Request, client: CoreClient = Depends(get_core_client)):
-    body = await read_body(request) if request.method == "POST" else None
-    return await proxy(request, client, request.method, "/api/v1/requests", body=body)
+@app.get("/api/v1/requests", operation_id="list_requests")
+async def list_requests(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/requests")
+
+
+@app.post("/api/v1/requests", operation_id="create_request")
+async def create_request(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "POST", "/api/v1/requests", body=await read_body(request))
 
 
 @app.api_route("/api/v1/requests/{request_id}", methods=["GET"])
@@ -153,10 +165,14 @@ async def get_request(request_id: str, request: Request, client: CoreClient = De
     return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}")
 
 
-@app.api_route("/api/v1/requests/{request_id}", methods=["PATCH", "DELETE"])
-async def mutate_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    body = await read_body(request) if request.method == "PATCH" else None
-    return await proxy(request, client, request.method, f"/api/v1/requests/{request_id}", body=body)
+@app.patch("/api/v1/requests/{request_id}", operation_id="update_request")
+async def update_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "PATCH", f"/api/v1/requests/{request_id}", body=await read_body(request))
+
+
+@app.delete("/api/v1/requests/{request_id}", operation_id="delete_request")
+async def delete_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "DELETE", f"/api/v1/requests/{request_id}")
 
 
 @app.api_route("/api/v1/requests/{request_id}/recheck-data", methods=["POST"])

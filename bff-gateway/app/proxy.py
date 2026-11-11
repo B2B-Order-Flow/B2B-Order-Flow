@@ -13,6 +13,12 @@ def core_path(path: str) -> str:
     return path
 
 
+def public_location(location: str) -> str:
+    if location.startswith("/internal/v1/"):
+        return "/api/v1/" + location.removeprefix("/internal/v1/")
+    return location
+
+
 async def proxy(
     request: Request,
     client: CoreClient,
@@ -39,6 +45,8 @@ async def proxy(
     response_headers = {
         name: upstream.headers[name] for name in ("location", "x-correlation-id") if name in upstream.headers
     }
+    if "location" in response_headers:
+        response_headers["location"] = public_location(response_headers["location"])
     response_headers.setdefault("X-Correlation-Id", correlation_id_context.get())
     return Response(
         content=upstream.content,
