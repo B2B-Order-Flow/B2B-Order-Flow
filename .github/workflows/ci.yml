@@ -75,6 +75,67 @@ jobs:
       - name: Unit-тесты (Vitest)
         run: npm test
 
+  core:
+    name: Тесты core-service
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: core-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      # Интеграционным тестам нужен Docker (Testcontainers), на раннере он есть
+      - name: Сборка и тесты
+        run: ./mvnw -B verify
+
+      - name: Отчёты тестов при падении
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-reports
+          path: core-service/target/surefire-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  bff:
+    name: Тесты bff-gateway
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: bff-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            bff-gateway/requirements.txt
+            bff-gateway/requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Линтер (ruff)
+        run: ruff check .
+
+      - name: Форматирование (ruff format)
+        run: ruff format --check .
+
+      - name: Unit-тесты (pytest)
+        run: pytest
+
+      - name: Контракт шлюза совпадает с контрактом ядра
+        run: python scripts/check_openapi_contract.py --core ../core-service/src/main/resources/openapi/core-api.yaml
+
   e2e:
     name: Тесты tests/e2e
     runs-on: ubuntu-latest
