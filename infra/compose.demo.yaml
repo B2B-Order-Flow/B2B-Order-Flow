@@ -1,0 +1,7 @@
+# Необязательный файл: включает профиль DEMO (нормативы SLA в минутах) для показа и сквозных тестов.
+# Подключается явно, в базовом compose профиль берётся из SLA_PROFILE в .env (по умолчанию PROD):
+#   docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml up -d
+services:
+  core-service:
+    environment:
+      SLA_PROFILE: DEMO

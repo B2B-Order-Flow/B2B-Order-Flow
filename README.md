@@ -78,7 +78,7 @@ flowchart LR
 
 ```bash
 cp .env.example .env        # замените все change_me на свои значения
-docker compose --env-file .env -f infra/compose.yaml up -d
+docker compose --env-file .env -f infra/compose.yaml up -d --build
 docker compose --env-file .env -f infra/compose.yaml ps
 ```
 
@@ -165,7 +165,7 @@ curl -H "X-Correlation-Id: test-1" "http://localhost:8081/crm/v1/customers?inn=7
 | 5. Неделя устойчивости | 11.01 – 22.01 | |
 | 6. Защита | 23.01 – 29.01 | |
 
-Готово: документация, каркас репозитория, Docker Compose с PostgreSQL и тремя моками. В работе: ядро, BFF, интерфейс.
+Готово: документация, каркас репозитория, Docker Compose с PostgreSQL, тремя моками, ядром и BFF. В работе: интерфейс, вторая неделя разработки.
 
 ## Участие в разработке
 

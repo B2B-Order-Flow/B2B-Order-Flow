@@ -10,8 +10,10 @@ Docker Compose и скрипты инициализации БД. Конфигу
 |---|---|
 | `core-db` | PostgreSQL 16, база `core_db`. Порт наружу не открыт |
 | `mock-crm`, `mock-billing`, `mock-registry` | WireMock, описание в `mocks/README.md`. Порты наружу не открыты |
+| `core-service` | Ядро (Spring Boot, Java 21), образ собирается из `core-service/Dockerfile`. Порт наружу не открыт |
+| `bff-gateway` | BFF (FastAPI), образ собирается из `bff-gateway/Dockerfile`. Порт наружу не открыт |
 
-Nginx, BFF, ядро и UI добавятся отдельными PR, когда у сервисов появятся образы.
+Nginx и UI добавятся отдельными PR, когда у сервисов появятся образы.
 
 ## Запуск
 
@@ -19,7 +21,7 @@ Nginx, BFF, ядро и UI добавятся отдельными PR, когд�
 
 ```
 cp .env.example .env
-docker compose --env-file .env -f infra/compose.yaml up -d
+docker compose --env-file .env -f infra/compose.yaml up -d --build
 docker compose --env-file .env -f infra/compose.yaml ps
 ```
 
@@ -32,6 +34,15 @@ docker compose --env-file .env -f infra/compose.yaml -f infra/compose.mocks-port
 ```
 
 Порты: CRM `8081`, биллинг `8082`, справочник `8083`, только на `127.0.0.1`.
+
+Шлюз на localhost (для сквозных тестов с хоста) и профиль DEMO подключаются своими файлами:
+
+```
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.app-ports.yaml up -d
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml up -d
+```
+
+Шлюз открывается на `127.0.0.1:8000`. Профиль DEMO задаёт для ядра `SLA_PROFILE=DEMO` (нормативы SLA в минутах). Первая сборка ядра долгая: Maven скачивает зависимости.
 
 ## База данных
 
