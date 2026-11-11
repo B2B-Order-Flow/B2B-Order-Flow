@@ -19,6 +19,7 @@
 - [План недели 2](plan-week2.md)
 
 ### Бизнес-анализ
+- [Обзор продукта](business/product-overview.md) — проблематика, целевая аудитория, уникальность, аналоги
 - [Исследование рынка B2B](business/research-b2b.md)
 - [Бизнес-процесс](business/business-process.md)
 - [Роли участников](business/roles.md)
