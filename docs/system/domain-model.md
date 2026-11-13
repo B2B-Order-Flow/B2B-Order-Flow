@@ -74,7 +74,7 @@ erDiagram
 | Владелец | `manager_id` | Менеджер заявки |
 | Заявка клиента | `address`, `requested_speed_mbps`, `desired_date`, `contact_name`, `contact_phone`, `contract_preference`, `client_comment` | |
 | Данные внешних систем | `segment`, `is_gov_customer`, `debt_amount`, `crm_manager_id` | Из mock CRM/биллинга/справочника; сырые ответы — в `external_check` |
-| Результат ТВ | `tech_result`, `tech_reject_reason`, `capex`, `construction_days` | |
+| Результат ТВ | `tech_result`, `tech_reject_reason_code`, `tech_reject_reason`, `capex`, `construction_days` | При «нет» — код из `reject_reason` и комментарий |
 | Выбранное предложение | `selected_offer_id` | Ссылка на `service_offer` |
 | Договор | `contract_number`, `contract_sent_at`, `contract_concluded_at` | |
 | События уровней | `work_started_at`, `activated_at`, `act_sent_at`, `closed_at`, `accepted_by_default` | Из них вычисляется уровень обязательств |
@@ -131,6 +131,7 @@ erDiagram
 | `id`, `stage_id`, `decided_by`, `decided_at` | |
 | `decision` | `APPROVE` / `RETURN` / `REJECT` |
 | `comment` | Обязателен для `RETURN` и `REJECT` |
+| `reject_reason_code` | Код из `reject_reason`; обязателен для `REJECT` |
 | `scope_hash` | Хэш параметров, на которые опиралось решение (обычная колонка, по ней идёт сравнение) |
 | `scope_snapshot` | JSONB — значения параметров на момент решения |
 | `superseded_at` | Когда решение потеряло силу при пересборке |
@@ -183,7 +184,8 @@ erDiagram
 | `sla_norm` | Нормативы SLA по типу этапа, профили `PROD` и `DEMO` (минуты; `calendar_kind`: `WORK` или `CALENDAR`) |
 | `work_calendar` | Календарь профиля PROD: дата, рабочий ли день, примечание, часовой пояс |
 | `pause_reason` | Закрытый справочник причин паузы: код, название, автоматическая ли, кто ставит и снимает |
-| `cancel_reason` | Причины отмены с признаком стороны (клиент/оператор) |
+| `cancel_reason` | Причины отмены с признаком стороны (клиент/оператор); значения — [business-process.md](../business/business-process.md), 11.6 |
+| `reject_reason` | Причины отклонения заявки: код, название, шаг (ТВ «нет», согласование); код `OTHER` есть всегда, комментарий к нему обязателен. Код нужен для аналитики причин отказов, комментарий — для деталей |
 | `idempotency_key` | Ключи идемпотентности: ключ, пользователь, хеш тела запроса, результат, срок 24 часа ([api-contract.md](api-contract.md), раздел 5.1) |
 | `export_job` | Задания экспорта: автор, формат, фильтры, статус, число строк, ключ файла, срок жизни ([archive-export.md](archive-export.md)) |
 
