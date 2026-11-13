@@ -315,7 +315,7 @@ POST /api/v1/stages/{id}/decision
 | `POST /stages/{id}/assign` | КООРД | T14 (первый этап исполнения) | Назначить или переназначить исполнителя |
 | `POST /stages/{id}/tech-result` | ТС | T05, T06, T07 (этап `TECH_CHECK`); T15b (этап `RECHECK_TECH`) | Результат ТВ: `AVAILABLE`, `WITH_CONSTRUCTION` (CAPEX, срок), `NONE` (причина) |
 | `POST /stages/{id}/return` | ТС | T09b | Вернуть заявку менеджеру на доработку с этапа проверки ТВ |
-| `POST /stages/{id}/decision` | ЮР, ФК, ЗК, РУК | T08, T09, T11 | `APPROVE`, `RETURN`, `REJECT` (комментарий обязателен для двух последних; для `REJECT` — ещё код причины `reasonCode` из справочника `reject_reason`) |
+| `POST /stages/{id}/decision` | ЮР, ФК, ЗК, РУК | T08, T09, T11 | `APPROVE`, `RETURN`, `REJECT` (комментарий обязателен для двух последних; для `REJECT` — ещё код причины `reasonCode` из справочника `rejection_reason`) |
 | `POST /stages/{id}/complete` | ИНЖ | — | Стройка, монтаж, устранение замечаний выполнены |
 | `POST /stages/{id}/activate` | ИНЖ | T16 | Тест пройден, услуга активирована |
 | `POST /stages/{id}/problem` | ИНЖ | T15 | Проблема исполнения: нет доступа (EC-11) или подключение невозможно (EC-22) |
