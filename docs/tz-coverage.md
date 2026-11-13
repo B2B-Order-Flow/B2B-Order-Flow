@@ -23,7 +23,7 @@
 | 9 | Реализовать единую точку взаимодействия (API Gateway) | [architecture.md](architecture/architecture.md) §2, [api-contract.md](system/api-contract.md) | Nginx + `bff-gateway` | ✅ | ⬜ | разработчик API, DevOps и QA |
 | 10 | Реализовать взаимодействие с mock-сервисами | [integrations.md](system/integrations.md) | Ядро: Integration Gateway, `mocks/` | ✅ | ⬜ | разработчик ядра, DevOps |
 | 11 | Реализовать контроль SLA для отдельных этапов | [sla.md](system/sla.md) | Ядро: SLA Monitor | ✅ | ⬜ | руководитель, разработчик ядра |
-| 12 | Реализовать уведомления участников | `system/notifications.md`, [api-contract.md](system/api-contract.md) §7 | Ядро: Notification Publisher; BFF: WebSocket | 🟡 типы событий есть, матрица получателей нет | ⬜ | руководитель, разработчик API |
+| 12 | Реализовать уведомления участников | `system/notifications.md`, [api-contract.md](system/api-contract.md) §7 | Ядро: Notification Publisher; BFF: WebSocket | ✅ типы событий и матрица получателей описаны | ⬜ | руководитель, разработчик API |
 | 13 | Реализовать историю изменений заявки и действий | [domain-model.md](system/domain-model.md) §4.7, [status-model.md](system/status-model.md) | Ядро: Audit & History | ✅ | ⬜ | руководитель, разработчик ядра |
 | 14 | Разработать веб-панель оператора или другой интерфейс | `business/ui-requirements.md` | `ui` | ⬜ | ⬜ | бизнес-аналитик |
 | 15 | Описать API и контракты взаимодействия | [api-contract.md](system/api-contract.md), [integrations.md](system/integrations.md) | OpenAPI-файлы в репозитории | ✅ описано, схемы не написаны | ⬜ | разработчик API, разработчик ядра |
@@ -71,5 +71,4 @@
 | Пробел | Последствие | Кто |
 |---|---|---|
 | `business/ui-requirements.md` пуст | Задача 14 и критерий по интерфейсу без описания; фронтенд строится по наитию | бизнес-аналитик |
-| `system/notifications.md` пуст | Задача 12: типы событий есть, матрица «кто получает» нет | руководитель |
 | OpenAPI-схемы не написаны | Задача 15 закрыта документом, но не артефактом поставки | разработчик API, разработчик ядра |
