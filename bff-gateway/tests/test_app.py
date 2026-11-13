@@ -121,3 +121,33 @@ async def test_week_two_command_validation_returns_problem():
 
     assert response.status_code == 422
     assert response.json()["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_commercial_terms_accepts_camel_case_fields():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["body"] = request.content
+        return httpx.Response(200, json={"version": 2})
+
+    transport = httpx.MockTransport(handler)
+
+    async def override() -> CoreClient:
+        return CoreClient(Settings(core_url="http://core.test", internal_token="test-token"), transport=transport)
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        api_transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=api_transport, base_url="http://test") as api:
+            response = await api.post(
+                "/api/v1/requests/request-1/commercial-terms",
+                json={"tariffType": "STANDARD", "contractType": "OFFER", "version": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["path"] == "/internal/v1/requests/request-1/commercial-terms"
+    assert b'"tariffType":"STANDARD"' in captured["body"]

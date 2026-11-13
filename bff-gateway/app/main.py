@@ -13,7 +13,15 @@ from .config import Settings, get_settings
 from .core_client import CoreClient
 from .errors import CoreClientError, core_client_error_handler, internal_error_handler, validation_error_handler
 from .headers import correlation_id_context, correlation_middleware
-from .models import Command, CommercialTerms, DecisionCommand, TechResultCommand
+from .models import (
+    AssignStageCommand,
+    Command,
+    CommercialTerms,
+    ContractConcludedCommand,
+    DecisionCommand,
+    PauseCommand,
+    TechResultCommand,
+)
 from .proxy import proxy
 
 logger = logging.getLogger("bff-gateway")
@@ -224,6 +232,21 @@ async def commercial_terms(request_id: str, request: Request, client: CoreClient
     )
 
 
+@app.get("/api/v1/requests/{request_id}/offers", operation_id="list_offers")
+async def list_offers(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/offers")
+
+
+@app.post("/api/v1/requests/{request_id}/offers", operation_id="add_offer")
+async def add_offer(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/offers")
+
+
+@app.post("/api/v1/requests/{request_id}/offers/{offer_id}/select", operation_id="select_offer")
+async def select_offer(request_id: str, offer_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/offers/{offer_id}/select")
+
+
 @app.get("/api/v1/stages", operation_id="list_stages")
 async def list_stages(request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(request, client, "GET", "/api/v1/stages")
@@ -244,7 +267,11 @@ async def claim_stage(stage_id: str, request: Request, client: CoreClient = Depe
 @app.post("/api/v1/stages/{stage_id}/assign", operation_id="assign_stage")
 async def assign_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(
-        request, client, "POST", f"/api/v1/stages/{stage_id}/assign", body=await validated_body(request, Command)
+        request,
+        client,
+        "POST",
+        f"/api/v1/stages/{stage_id}/assign",
+        body=await validated_body(request, AssignStageCommand),
     )
 
 
@@ -295,7 +322,9 @@ async def contract_sent(request_id: str, request: Request, client: CoreClient = 
 
 @app.post("/api/v1/requests/{request_id}/contract/concluded", operation_id="contract_concluded")
 async def contract_concluded(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, f"/api/v1/requests/{request_id}/contract/concluded")
+    return await request_command(
+        request, client, f"/api/v1/requests/{request_id}/contract/concluded", ContractConcludedCommand
+    )
 
 
 @app.post("/api/v1/requests/{request_id}/contract/accept-offer", operation_id="accept_offer")
@@ -321,6 +350,21 @@ async def close_by_default(request_id: str, request: Request, client: CoreClient
 @app.get("/api/v1/requests/{request_id}/sla", operation_id="request_sla")
 async def request_sla(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/sla")
+
+
+@app.post("/api/v1/stages/{stage_id}/sla/pause", operation_id="pause_stage_sla")
+async def pause_stage_sla(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/sla/pause", PauseCommand)
+
+
+@app.post("/api/v1/stages/{stage_id}/sla/resume", operation_id="resume_stage_sla")
+async def resume_stage_sla(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/sla/resume")
+
+
+@app.post("/api/v1/stages/{stage_id}/sla/extend-pause", operation_id="extend_stage_sla_pause")
+async def extend_stage_sla_pause(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/sla/extend-pause", PauseCommand)
 
 
 @app.get("/api/v1/notifications", operation_id="list_notifications")

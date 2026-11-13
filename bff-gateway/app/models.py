@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
@@ -10,9 +11,10 @@ class Command(BaseModel):
 
 
 class CommercialTerms(Command):
-    tariff_type: str
-    contract_type: str
-    discount_percent: Decimal = Field(ge=0, le=100)
+    tariffType: str
+    contractType: str
+    discountPercent: Decimal | None = Field(default=None, ge=0, le=100)
+    speedMbps: int | None = Field(default=None, ge=1, le=100000)
 
 
 class TechResult(StrEnum):
@@ -23,6 +25,10 @@ class TechResult(StrEnum):
 
 class TechResultCommand(Command):
     result: TechResult
+    capex: Decimal | None = Field(default=None, ge=0)
+    constructionDays: int | None = Field(default=None, ge=1)
+    reasonCode: str | None = None
+    comment: str | None = Field(default=None, max_length=4000)
 
 
 class StageDecision(StrEnum):
@@ -34,8 +40,18 @@ class StageDecision(StrEnum):
 class DecisionCommand(Command):
     decision: StageDecision
     comment: str | None = Field(default=None, max_length=4000)
+    reasonCode: str | None = None
+
+
+class AssignStageCommand(Command):
+    assigneeId: str
+
+
+class ContractConcludedCommand(Command):
+    contractNumber: str = Field(min_length=1, max_length=100)
+    concludedAt: date
 
 
 class PauseCommand(Command):
-    reason: str
+    reasonCode: str
     comment: str = Field(max_length=4000)

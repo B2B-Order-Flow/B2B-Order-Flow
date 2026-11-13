@@ -129,6 +129,25 @@ paths:
       parameters: [{ $ref: '#/components/parameters/RequestId'}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Command'}}}}
       responses: {'200': {description: Terms saved}, '422': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests/{requestId}/offers:
+    get:
+      operationId: listOffers
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      responses: {'200': {description: Service offers}}
+    post:
+      operationId: addOffer
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Command'}}}}
+      responses: {'201': {description: Offer added}, '422': { $ref: '#/components/responses/Problem'}}
+  /api/v1/requests/{requestId}/offers/{offerId}/select:
+    post:
+      operationId: selectOffer
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}, {name: offerId, in: path, required: true, schema: {type: string, format: uuid}}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Command'}}}}
+      responses: {'200': {description: Offer selected}, '409': { $ref: '#/components/responses/Problem'}}
   /api/v1/stages:
     get:
       operationId: listStages
