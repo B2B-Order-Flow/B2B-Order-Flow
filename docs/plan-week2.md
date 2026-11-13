@@ -111,6 +111,8 @@
 
 ## 6. Таблица правил формата полей
 
+Таблица ведётся в [api-contract.md](system/api-contract.md), раздел 10. Поля форм регистрации и заявки описаны; поля недели 2 добавляются до 15.11.
+
 Готовит Дима до 15.11 (раздел 5, п. 2). Источники значений: [domain-model.md](system/domain-model.md), [nfr.md](system/nfr.md), раздел 7, [integrations.md](system/integrations.md), раздел 3. Состав:
 
 | Что | Пример правила |
@@ -142,4 +144,5 @@
 
 | № | Файл | Расхождение | Решение (код / документ) | Статус |
 |---|---|---|---|---|
-| | | | | |
+| 1 | `RequestWorkflowService` (отправка заявки) | `desiredDate` проверяется только на заполненность; по [ui-requirements.md](business/ui-requirements.md), 6.7, и [api-contract.md](system/api-contract.md), 10.6, дата не раньше сегодняшней | Код: проверка в ядре | Открыто |
+| 2 | `CompanyService.register`, `core-api.yaml` (`RegisterCompanyRequest`) | `kpp` и `ogrn` ограничены только длиной строки; по [api-contract.md](system/api-contract.md), 10.4, КПП — 9 цифр, ОГРН — 13 или 15 цифр | Код: шаблон в контракте и проверка в ядре | Открыто |
