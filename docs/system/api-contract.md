@@ -473,7 +473,7 @@ POST /api/v1/stages/{id}/decision
 
 Единый источник правил для трёх слоёв: интерфейс проверяет поля до отправки и показывает подсказки, шлюз проверяет синтаксис и типы, ядро — синтаксис, типы и бизнес-правила (раздел 9). Значения согласованы с `core-api.yaml`, кодом ядра и формами в [ui-requirements.md](../business/ui-requirements.md), раздел 6.
 
-В разделе — поля форм регистрации и заявки ([plan-week2.md](../plan-week2.md), раздел 6). Поля недели 2 (коммерческие условия, результат ТВ, причины пауз) добавляются отдельно.
+В разделе — поля форм регистрации и заявки и команд недели 2 ([plan-week2.md](../plan-week2.md), раздел 6). Тела команд недели 2 — в 6.13.
 
 ### 10.1. Общие правила
 
@@ -482,6 +482,8 @@ POST /api/v1/stages/{id}/decision
 - **Ошибка формата** — `422 VALIDATION_FAILED`, в `violations` — поле (имя из JSON), код и текст. Коды нарушений: `REQUIRED` — не заполнено, `INVALID` — неверный формат или значение вне диапазона, `ALREADY_EXISTS` — значение уже занято. Отдельные коды бизнес-ошибок — в каталоге (3.1).
 - **Даты** — `YYYY-MM-DD`, время — ISO 8601 в UTC ([domain-model.md](domain-model.md)).
 - **Перечисления** — только значения из `core-api.yaml`.
+- **Деньги** — строка с двумя знаками после точки, например `"300000.00"` ([plan-week2.md](../plan-week2.md), раздел 6).
+- **Коды справочников** (причины пауз, отмены, отклонения) — только существующие коды; неизвестный код — `INVALID`, для причин паузы — отдельный код `422 PAUSE_REASON_INVALID` (3.1).
 - **Где проверяется:** «формат» — шлюз и ядро; «ядро» — только ядро, потому что для проверки нужны данные или статус.
 
 ### 10.2. Регистрация пользователя — `POST /auth/register`
@@ -536,9 +538,61 @@ POST /api/v1/stages/{id}/decision
 
 При отправке ядро также проверяет, что у заявки есть предложение услуги (`offers`, `REQUIRED`); в MVP оно создаётся автоматически ([domain-model.md](domain-model.md), 4.2).
 
-### 10.7. Открытые вопросы
+### 10.7. Коммерческие условия — `POST /requests/{id}/commercial-terms`
+
+| Поле | Обязательно | Правило | Код нарушения |
+|---|---|---|---|
+| `tariffType` | Да | `STANDARD` или `INDIVIDUAL` | `REQUIRED`, `INVALID` |
+| `contractType` | Да | `OFFER`, `STANDARD` или `CLIENT_FORM` | `REQUIRED`, `INVALID` |
+| `discountPercent` | При `INDIVIDUAL` | Число от 0 до 100 | `REQUIRED`, `INVALID` |
+| `version` | Да | Целое ≥ 0 | `REQUIRED`, `INVALID` |
+
+Проверка «скидка обязательна при `INDIVIDUAL`» зависит от значения другого поля — её выполняет ядро.
+
+### 10.8. Этапы — `POST /stages/{id}/…`
+
+| Команда | Поле | Обязательно | Правило | Код нарушения |
+|---|---|---|---|---|
+| `tech-result` | `result` | Да | `AVAILABLE`, `WITH_CONSTRUCTION` или `NONE` | `REQUIRED`, `INVALID` |
+| `tech-result` | `capex` | При `WITH_CONSTRUCTION` | Деньги (10.1) | `REQUIRED`, `INVALID` |
+| `tech-result` | `constructionDays` | При `WITH_CONSTRUCTION` | Целое, календарные дни ([sla.md](sla.md), 4) | `REQUIRED`, `INVALID` |
+| `tech-result` | `reasonCode` | При `NONE` | Код из `rejection_reason` для шага ТВ | `REQUIRED`, `INVALID` |
+| `tech-result` | `comment` | При `reasonCode = OTHER` | До 4 000 символов | `REQUIRED`, `INVALID` |
+| `decision` | `decision` | Да | `APPROVE`, `RETURN` или `REJECT` | `REQUIRED`, `INVALID` |
+| `decision` | `comment` | При `RETURN` и `REJECT` | До 4 000 символов | `REQUIRED`, `INVALID` |
+| `decision` | `reasonCode` | При `REJECT` | Код из `rejection_reason` для шага согласования | `REQUIRED`, `INVALID` |
+| `assign` | `assigneeId` | Да | `uuid` активного пользователя с ролью очереди этапа | `REQUIRED`, `INVALID` |
+| все | `version` | Да | Целое ≥ 0, версия этапа | `REQUIRED`, `INVALID` |
+
+Обязательность полей, зависящую от `result`, `decision` и `reasonCode`, и проверку исполнителя выполняет ядро.
+
+### 10.9. Договор — `POST /requests/{id}/contract/concluded`
+
+| Поле | Обязательно | Правило | Код нарушения |
+|---|---|---|---|
+| `contractNumber` | Да | Строка | `REQUIRED`, `INVALID` |
+| `concludedAt` | Да | Дата | `REQUIRED`, `INVALID` |
+| `version` | Да | Целое ≥ 0, версия заявки | `REQUIRED`, `INVALID` |
+
+Остальные команды договора, акта и закрытия (6.13) передают только `version`.
+
+### 10.10. Пауза SLA — `POST /stages/{id}/sla/pause`, `…/resume`, `…/extend-pause`
+
+По [sla.md](sla.md), 6.1 и 6.2.
+
+| Команда | Поле | Обязательно | Правило | Код нарушения |
+|---|---|---|---|---|
+| `pause` | `reasonCode` | Да | Только ручные причины: `AWAIT_CLIENT_DATA`, `NO_ACCESS`, `CLIENT_RESCHEDULED` | `REQUIRED`; неизвестная или автоматическая причина — `422 PAUSE_REASON_INVALID` |
+| `pause` | `comment` | Да | До 4 000 символов | `REQUIRED`, `INVALID` |
+| `extend-pause` | `comment` | Да | До 4 000 символов | `REQUIRED`, `INVALID` |
+| все | `version` | Да | Целое ≥ 0, версия этапа | `REQUIRED`, `INVALID` |
+
+### 10.11. Открытые вопросы
 
 | № | Вопрос | Предложение | С кем решить |
 |---|---|---|---|
 | 1 | Какие символы допустимы в логине: сейчас ограничена только длина | Латиница, цифры, точка, дефис, подчёркивание (как в логинах вида `a.smirnova`) | Дима |
 | 2 | «Сегодня» для `desiredDate` — по какому часовому поясу | По часовому поясу календаря профиля `PROD` ([sla.md](sla.md), 3.1) | Кирилл |
+| 3 | Нижние границы `capex` и `constructionDays` при `WITH_CONSTRUCTION` | `capex` больше 0, `constructionDays` не меньше 1: стройка без затрат и срока не имеет смысла | Кирилл, Егор |
+| 4 | Длина `contractNumber` | До 100 символов | Кирилл |
+| 5 | Может ли `concludedAt` быть в будущем | Нет: не позже сегодняшней даты | Егор |
