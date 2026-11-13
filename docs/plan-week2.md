@@ -113,6 +113,8 @@
 
 ## 6. Таблица правил формата полей
 
+Таблица ведётся в [api-contract.md](system/api-contract.md), раздел 10. Описаны поля форм регистрации и заявки и команд недели 2: коммерческие условия, этапы, договор, пауза SLA.
+
 Готовит Дима до 15.11 (раздел 5, п. 2). Источники значений: [domain-model.md](system/domain-model.md), [nfr.md](system/nfr.md), раздел 7, [integrations.md](system/integrations.md), раздел 3. Состав:
 
 | Что | Пример правила |
@@ -147,7 +149,9 @@
 
 | № | Файл | Расхождение | Решение (код / документ) | Статус |
 |---|---|---|---|---|
-| | | | | |
+| 1 | `RequestWorkflowService` (отправка заявки) | `desiredDate` проверяется только на заполненность; по [ui-requirements.md](business/ui-requirements.md), 6.7, и [api-contract.md](system/api-contract.md), 10.6, дата не раньше сегодняшней | Код: проверка в ядре | Открыто |
+| 2 | `CompanyService.register`, `core-api.yaml` (`RegisterCompanyRequest`) | `kpp` и `ogrn` ограничены только длиной строки; по [api-contract.md](system/api-contract.md), 10.4, КПП — 9 цифр, ОГРН — 13 или 15 цифр | Код: шаблон в контракте и проверка в ядре | Открыто |
+| 3 | `RequestWorkflowService` (отправка заявки) | Телефон проверяется по числу символов (10–20 вместе со скобками и пробелами), пустой даёт `INVALID`; по [api-contract.md](system/api-contract.md), 10.6, — не менее 10 цифр, пустой при отправке — `REQUIRED` | Код: проверка в ядре | Открыто |
 
 ## 9. Контрольная точка (на неделе 16–22.11)
 
