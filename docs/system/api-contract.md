@@ -89,6 +89,7 @@ GET /api/v1/requests?page=0&size=20&sort=createdAt,desc&status=IN_APPROVAL&compa
 |---|---|---|---|
 | `VALIDATION_FAILED` | 422 | Обязательные поля, формат, скорость ≤ 0 | EC-02 |
 | `MALFORMED_REQUEST` | 400 | Тело не разбирается как JSON, нет обязательного параметра или заголовка, неверный тип параметра | — |
+| `METHOD_NOT_ALLOWED` | 405 | HTTP-метод не поддерживается для этого пути | — |
 | `ACTIVE_ROLE_REQUIRED` | 422 | У пользователя несколько ролей, `X-Active-Role` не передан | — |
 | `ACTIVE_COMPANY_REQUIRED` | 422 | Пользователь состоит в нескольких компаниях с активной ролью, компания не определена | — |
 | `FILE_TOO_LARGE` | 422 | Файл больше 10 МБ | [nfr.md](nfr.md) §7 |
@@ -288,7 +289,7 @@ POST /api/v1/stages/{id}/decision
 | `POST /requests/{id}/commercial-terms` | МП | T04 | Зафиксировать тариф, скидку, тип договора и отправить в работу |
 | `POST /requests/{id}/resubmit` | МП | T10 | Отправить повторно после доработки |
 | `POST /requests/{id}/from-rejected` | КЛ | — | Новая заявка на основе отклонённой (`parentRequestId`) |
-| `GET /requests` | все, кроме АДМ | — | Список с фильтрами и пагинацией |
+| `GET /requests` | все, кроме АДМ | — | Список с фильтрами и пагинацией: `status`, `companyId`, `managerId`, `unassigned=true` (только без менеджера — очередь менеджеров, UI-09) |
 | `GET /requests/{id}` | по правам | — | Карточка: статус, маршрут, этапы, уровень обязательств, `version` |
 | `GET /requests/{id}/history` | по правам | — | История действий из `audit_log` |
 | `GET /requests/{id}/revisions` | МП, КООРД, РУК | — | Снимки параметров (`request_revision`) |
@@ -314,7 +315,7 @@ POST /api/v1/stages/{id}/decision
 | `POST /stages/{id}/assign` | КООРД | T14 (первый этап исполнения) | Назначить или переназначить исполнителя |
 | `POST /stages/{id}/tech-result` | ТС | T05, T06, T07 (этап `TECH_CHECK`); T15b (этап `RECHECK_TECH`) | Результат ТВ: `AVAILABLE`, `WITH_CONSTRUCTION` (CAPEX, срок), `NONE` (причина) |
 | `POST /stages/{id}/return` | ТС | T09b | Вернуть заявку менеджеру на доработку с этапа проверки ТВ |
-| `POST /stages/{id}/decision` | ЮР, ФК, ЗК, РУК | T08, T09, T11 | `APPROVE`, `RETURN`, `REJECT` (комментарий обязателен для двух последних) |
+| `POST /stages/{id}/decision` | ЮР, ФК, ЗК, РУК | T08, T09, T11 | `APPROVE`, `RETURN`, `REJECT` (комментарий обязателен для двух последних; для `REJECT` — ещё код причины `reasonCode` из справочника `reject_reason`) |
 | `POST /stages/{id}/complete` | ИНЖ | — | Стройка, монтаж, устранение замечаний выполнены |
 | `POST /stages/{id}/activate` | ИНЖ | T16 | Тест пройден, услуга активирована |
 | `POST /stages/{id}/problem` | ИНЖ | T15 | Проблема исполнения: нет доступа (EC-11) или подключение невозможно (EC-22) |
@@ -372,8 +373,8 @@ POST /api/v1/stages/{id}/decision
 | Метод и путь | Роль | Что делает |
 |---|---|---|
 | `GET /notifications?unread=true` | все | Список уведомлений пользователя |
-| `POST /notifications/{id}/read` | все | Отметить прочитанным |
-| `POST /notifications/read-all` | все | Отметить все прочитанными |
+| `POST /notifications/{id}/read` | все | Отметить прочитанным; без тела ([notifications.md](notifications.md), 7) |
+| `POST /notifications/read-all` | все | Отметить все прочитанными; без тела |
 
 ### 6.10. Архив и экспорт
 
@@ -403,6 +404,31 @@ POST /api/v1/stages/{id}/decision
 | `GET /actuator/health` (ядро) | **Только приватная сеть** | Живость ядра и БД |
 | `GET /actuator/**` (прочее) | Закрыто | Наружу не публикуется |
 | `GET /api/v1/openapi.json` | Авторизованные | Внешняя схема; Swagger ядра наружу не публикуется |
+
+### 6.13. Тела команд недели 2
+
+Поля — из [domain-model.md](domain-model.md) (заявка, `service_offer`), имена в JSON — `camelCase`. Каждая команда передаёт `version` объекта, над которым выполняется действие: заявки — для операций `/requests/{id}/…`, этапа — для `/stages/{id}/…` (5.2). Ответ — актуальное представление этого объекта с новой `version`. Правила формата полей — раздел 10.
+
+| Операция | Тело | Обязательно | Поля модели |
+|---|---|---|---|
+| `POST /requests/{id}/commercial-terms` | `tariffType` (`STANDARD` / `INDIVIDUAL`), `discountPercent`, `contractType` (`OFFER` / `STANDARD` / `CLIENT_FORM`), `version` | `tariffType`, `contractType`, `version`; `discountPercent` — при `INDIVIDUAL` (условие T04, [status-model.md](status-model.md)) | `service_offer`: `tariff_type`, `discount_percent`, `contract_type` |
+| `POST /stages/{id}/claim` | `version` | `version` | Исполнитель этапа |
+| `POST /stages/{id}/assign` | `assigneeId`, `version` | оба | Исполнитель этапа |
+| `POST /stages/{id}/tech-result` | `result` (`AVAILABLE` / `WITH_CONSTRUCTION` / `NONE`), `capex`, `constructionDays`, `reasonCode`, `comment`, `version` | `result`, `version`; `capex` и `constructionDays` — при `WITH_CONSTRUCTION`; `reasonCode` — при `NONE`; `comment` — при `reasonCode = OTHER` | Заявка: `tech_result`, `capex`, `construction_days`, `tech_reject_reason_code`, `tech_reject_reason` |
+| `POST /stages/{id}/complete` | `version` | `version` | — |
+| `POST /stages/{id}/activate` | `version` | `version` | Заявка: `activated_at` |
+| `POST /requests/{id}/contract/sent` | `version` | `version` | Заявка: `contract_sent_at` |
+| `POST /requests/{id}/contract/concluded` | `contractNumber`, `concludedAt` (дата), `version` | все | Заявка: `contract_number`, `contract_concluded_at` |
+| `POST /requests/{id}/contract/accept-offer` | `version` | `version` | Заявка: `contract_concluded_at` |
+| `POST /requests/{id}/act/sent` | `version` | `version` | Заявка: `act_sent_at` |
+| `POST /requests/{id}/act/signed` | `version` | `version` | Заявка: `closed_at` |
+| `POST /requests/{id}/close-by-default` | `version` | `version` | Заявка: `closed_at`, `accepted_by_default` |
+
+Фильтры чтения недели 2: `GET /stages` — `queueRole`, `status`, пагинация (2.1); `GET /stages/my` — без фильтров, сортировка по остатку SLA.
+
+Открытые вопросы:
+1. Кто и когда заполняет `price_rub`, `term_months` и `speed_mbps` предложения: в T04 ([status-model.md](status-model.md)) названы только тариф, скидка и тип договора.
+2. Допустима ли скидка при тарифе `STANDARD` или поле в этом случае не передаётся.
 
 ## 7. Типы событий
 
@@ -436,6 +462,8 @@ POST /api/v1/stages/{id}/decision
 | `SLA_ESCALATION` | Второй уровень эскалации |
 | `PAUSE_LIMIT_WARNING` | 2 рабочих дня до предела паузы |
 | `PAUSE_LIMIT_REACHED` | Предел паузы достигнут |
+| `CONTROL_DEADLINE_WARNING` | Контрольный срок заявки скоро истечёт; вид срока — `payload.deadlineKind`: `DATA_CHECK`, `MANAGER_ASSIGNMENT`, `TECH_RESULT`, `CANCEL_RESPONSE` ([sla.md](sla.md), 8) |
+| `CONTROL_DEADLINE_BREACH` | Контрольный срок заявки истёк; `deadlineKind` — `DATA_CHECK`, `MANAGER_ASSIGNMENT`, `TECH_RESULT`, `ACCEPTANCE`, `CANCEL_RESPONSE` (только для запроса оператора: запрос клиента по истечении снимается переходом T22) |
 | `INTEGRATION_ERROR` | Внешняя система недоступна (EC-10) |
 | `COMPANY_CONFIRMED` / `COMPANY_REJECTED` | Решение по регистрации компании |
 | `EXPORT_READY` | Экспорт готов к скачиванию |
