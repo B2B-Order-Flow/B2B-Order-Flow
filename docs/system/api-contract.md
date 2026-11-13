@@ -479,10 +479,10 @@ POST /api/v1/stages/{id}/decision
 
 - **Строки обрезаются по краям.** Строка из одних пробелов считается незаполненной.
 - **Длина — в символах.**
-- **Ошибка формата** — `422 VALIDATION_FAILED`, в `violations` — поле (имя из JSON), код и текст. Коды нарушений: `REQUIRED` — не заполнено, `INVALID` — неверный формат или значение вне диапазона, `ALREADY_EXISTS` — значение уже занято. Отдельные коды бизнес-ошибок — в каталоге (3.1).
+- **Ошибка формата** — `422 VALIDATION_FAILED`, в `violations` — поле (имя из JSON), код и текст. Коды нарушений: `REQUIRED` — не заполнено, `INVALID` — неверный формат или значение вне диапазона, `ALREADY_EXISTS` — значение уже занято, `LIQUIDATED` — организация ликвидирована по данным справочника (интерфейс показывает для него отдельный текст). Отдельные коды бизнес-ошибок — в каталоге (3.1).
 - **Даты** — `YYYY-MM-DD`, время — ISO 8601 в UTC ([domain-model.md](domain-model.md)).
 - **Перечисления** — только значения из `core-api.yaml`.
-- **Деньги** — строка с двумя знаками после точки, например `"300000.00"` ([plan-week2.md](../plan-week2.md), раздел 6).
+- **Деньги и проценты** — строка с двумя знаками после точки, например `"300000.00"`, `"10.00"` ([plan-week2.md](../plan-week2.md), раздел 6).
 - **Коды справочников** (причины пауз, отмены, отклонения) — только существующие коды; неизвестный код — `INVALID`, для причин паузы — отдельный код `422 PAUSE_REASON_INVALID` (3.1).
 - **Где проверяется:** «формат» — шлюз и ядро; «ядро» — только ядро, потому что для проверки нужны данные или статус.
 
@@ -509,7 +509,7 @@ POST /api/v1/stages/{id}/decision
 | `name` | Да | До 500 символов | `REQUIRED`, `INVALID` | формат |
 | `inn` | Да | 10 цифр (организация) или 12 (ИП), контрольная сумма | `INVALID` | формат |
 | `inn` | — | Нет активной компании с таким ИНН | `409 COMPANY_INN_EXISTS` | ядро |
-| `inn` | — | Найден в справочнике клиентов и не ликвидирован ([integrations.md](integrations.md)); когда проверяется — [plan-week1.md](../plan-week1.md), раздел 7, расхождение 11 | `422 COMPANY_INN_NOT_FOUND`; ликвидирована — `422 VALIDATION_FAILED` с нарушением `LIQUIDATED` | ядро |
+| `inn` | — | Найден в справочнике клиентов и не ликвидирован ([integrations.md](integrations.md)); проверяется при регистрации ([plan-week1.md](../plan-week1.md), раздел 7, расхождение 11) | `422 COMPANY_INN_NOT_FOUND`; ликвидирована — `422 VALIDATION_FAILED` с нарушением `LIQUIDATED` | ядро |
 | `kpp` | Нет | 9 цифр | `INVALID` | формат |
 | `ogrn` | Нет | 13 цифр (организация) или 15 (ИП) | `INVALID` | формат |
 | `legalAddress` | Да | До 500 символов | `REQUIRED`, `INVALID` | формат |
@@ -531,7 +531,7 @@ POST /api/v1/stages/{id}/decision
 | `requestedSpeedMbps` | Нет | Да | Целое 1–100 000 | `REQUIRED`, `INVALID` |
 | `desiredDate` | Нет | Да | Дата, не раньше сегодняшней | `REQUIRED`, `INVALID` |
 | `contactName` | Нет | Да | До 255 символов | `REQUIRED`, `INVALID` |
-| `contactPhone` | Нет | Да | До 32 символов; `+` в начале по желанию, затем 10–20 символов из цифр, скобок, дефисов и пробелов | `INVALID` |
+| `contactPhone` | Нет | Да | До 32 символов, не менее 10 цифр; кроме цифр допустимы `+` в начале, скобки, дефисы и пробелы | `REQUIRED`, `INVALID` |
 | `contractPreference` | Нет | Нет | `OFFER`, `STANDARD` или `CLIENT_FORM` | `INVALID` |
 | `clientComment` | Нет | Нет | До 4 000 символов | `INVALID` |
 | `version` | `PATCH` — да | Да | Целое ≥ 0 | `REQUIRED`, `INVALID` |
@@ -544,7 +544,8 @@ POST /api/v1/stages/{id}/decision
 |---|---|---|---|
 | `tariffType` | Да | `STANDARD` или `INDIVIDUAL` | `REQUIRED`, `INVALID` |
 | `contractType` | Да | `OFFER`, `STANDARD` или `CLIENT_FORM` | `REQUIRED`, `INVALID` |
-| `discountPercent` | При `INDIVIDUAL` | Число от 0 до 100 | `REQUIRED`, `INVALID` |
+| `discountPercent` | При `INDIVIDUAL` | Проценты (10.1), от `"0.00"` до `"100.00"` | `REQUIRED`, `INVALID` |
+| `speedMbps` | Нет | Целое 1–100 000; если не передано — скорость из заявки (6.13) | `INVALID` |
 | `version` | Да | Целое ≥ 0 | `REQUIRED`, `INVALID` |
 
 Проверка «скидка обязательна при `INDIVIDUAL`» зависит от значения другого поля — её выполняет ядро.
@@ -564,14 +565,14 @@ POST /api/v1/stages/{id}/decision
 | `assign` | `assigneeId` | Да | `uuid` активного пользователя с ролью очереди этапа | `REQUIRED`, `INVALID` |
 | все | `version` | Да | Целое ≥ 0, версия этапа | `REQUIRED`, `INVALID` |
 
-Обязательность полей, зависящую от `result`, `decision` и `reasonCode`, и проверку исполнителя выполняет ядро.
+Обязательность полей, зависящую от `result`, `decision` и `reasonCode`, и проверку исполнителя выполняет ядро. На неделе 2 `WITH_CONSTRUCTION` даёт `409 ILLEGAL_TRANSITION` (6.13).
 
 ### 10.9. Договор — `POST /requests/{id}/contract/concluded`
 
 | Поле | Обязательно | Правило | Код нарушения |
 |---|---|---|---|
 | `contractNumber` | Да | Строка | `REQUIRED`, `INVALID` |
-| `concludedAt` | Да | Дата | `REQUIRED`, `INVALID` |
+| `concludedAt` | Да | Дата, не позже сегодняшней | `REQUIRED`, `INVALID` |
 | `version` | Да | Целое ≥ 0, версия заявки | `REQUIRED`, `INVALID` |
 
 Остальные команды договора, акта и закрытия (6.13) передают только `version`.
@@ -593,6 +594,5 @@ POST /api/v1/stages/{id}/decision
 |---|---|---|---|
 | 1 | Какие символы допустимы в логине: сейчас ограничена только длина | Латиница, цифры, точка, дефис, подчёркивание (как в логинах вида `a.smirnova`) | Дима |
 | 2 | «Сегодня» для `desiredDate` — по какому часовому поясу | По часовому поясу календаря профиля `PROD` ([sla.md](sla.md), 3.1) | Кирилл |
-| 3 | Нижние границы `capex` и `constructionDays` при `WITH_CONSTRUCTION` | `capex` больше 0, `constructionDays` не меньше 1: стройка без затрат и срока не имеет смысла | Кирилл, Егор |
+| 3 | Нижние границы `capex` и `constructionDays` при `WITH_CONSTRUCTION` | `capex` больше 0, `constructionDays` не меньше 1: стройка без затрат и срока не имеет смысла (Егор согласен) | Кирилл |
 | 4 | Длина `contractNumber` | До 100 символов | Кирилл |
-| 5 | Может ли `concludedAt` быть в будущем | Нет: не позже сегодняшней даты | Егор |
