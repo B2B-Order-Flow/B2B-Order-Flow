@@ -60,6 +60,12 @@ tags:
     description: Переходы заявки недели 2 (T04, T05, T07, T13, T18)
   - name: Stages
     description: Очередь роли и команды этапов
+  - name: Sla
+    description: Таймеры SLA этапов и заявки, паузы
+  - name: Notifications
+    description: Уведомления пользователя
+  - name: Events
+    description: Канал событий для шлюза и билет WebSocket
 paths:
   /internal/v1/auth/register:
     post:
@@ -1050,6 +1056,251 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/sla:
+    get:
+      operationId: getRequestSla
+      tags: [Sla]
+      summary: Таймеры SLA и контрольные сроки заявки
+      description: |
+        Норматив, остаток, время по SLA и календарное, журнал пауз по каждому этапу и по
+        контрольным срокам заявки (docs/system/sla.md, 8 и 10). Доступно менеджеру,
+        исполнителям этапов, руководителю B2B и координатору; клиенту SLA не показывается — `403`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Таймеры и журнал пауз
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlaView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/sla/pause:
+    post:
+      operationId: pauseStageSla
+      tags: [Sla]
+      summary: Ручная пауза SLA этапа
+      description: |
+        Координатор ставит паузу с причиной из справочника `pause_reason` и обязательным
+        комментарием (docs/system/sla.md, 6.2). Допустимы только ручные причины:
+        `AWAIT_CLIENT_DATA`, `NO_ACCESS`, `CLIENT_RESCHEDULED`; автоматическая или неизвестная
+        причина — `422 PAUSE_REASON_INVALID`. Запись паузы попадает в журнал.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlaPausePayload'
+      responses:
+        '200':
+          description: Пауза поставлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/sla/resume:
+    post:
+      operationId: resumeStageSla
+      tags: [Sla]
+      summary: Снять ручную паузу SLA этапа
+      description: |
+        Координатор снимает паузу; отсчёт SLA продолжается, `due_at` пересчитывается
+        по оставшемуся рабочему времени. Автоматические паузы снимаются только переходами.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Пауза снята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/sla/extend-pause:
+    post:
+      operationId: extendStageSlaPause
+      tags: [Sla]
+      summary: Продлить паузу SLA этапа
+      description: |
+        Координатор продлевает паузу при достижении предела 10 рабочих дней (DEMO — 4 минуты):
+        `extended_count` растёт, предел сдвигается, комментарий обязателен
+        (docs/system/sla.md, 6.2, п. 4).
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlaExtendPausePayload'
+      responses:
+        '200':
+          description: Пауза продлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [Notifications]
+      summary: Уведомления текущего пользователя
+      description: |
+        Только свои уведомления, новые сверху. Источник истины для интерфейса
+        (docs/system/notifications.md, 7): WebSocket служит лишь сигналом.
+      parameters:
+        - name: unread
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Только непрочитанные
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница уведомлений
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/notifications/{notificationId}/read:
+    post:
+      operationId: readNotification
+      tags: [Notifications]
+      summary: Отметить уведомление прочитанным
+      description: |
+        Без тела. Повторное прочтение не ошибка: `read_at` не меняется.
+        Чужое уведомление — `404`.
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '204':
+          description: Уведомление прочитано
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/notifications/read-all:
+    post:
+      operationId: readAllNotifications
+      tags: [Notifications]
+      summary: Отметить все уведомления прочитанными
+      description: Без тела. Уже прочитанные не меняются.
+      responses:
+        '204':
+          description: Все уведомления прочитаны
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/events/stream:
+    get:
+      operationId: streamEvents
+      tags: [Events]
+      summary: Канал событий ядро → шлюз (Server-Sent Events)
+      description: |
+        Постоянное соединение, которое шлюз открывает при старте (docs/system/api-contract.md, 4.5).
+        Каждое событие — строка `data: <JSON EventSignal>`; данные в сигнале не передаются,
+        клиент забирает их по REST. После коммита транзакции перехода ядро отправляет сигнал
+        и ставит `notification.published_at`. При подключении сначала уходят записи с пустым
+        `published_at` и записи после `Last-Event-ID`, затем новые.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: Момент `created_at` последнего полученного события.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Поток `text/event-stream`; в `data:` — JSON `EventSignal`
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/ws/ticket:
+    get:
+      operationId: issueWsTicket
+      tags: [Events]
+      summary: Одноразовый билет для WebSocket
+      description: |
+        Билет выдаётся аутентифицированному пользователю, живёт 30 секунд, привязан к
+        пользователю и активной роли и проверяется ядром при установке соединения
+        (docs/system/api-contract.md, 4.4). Шлюз передаёт билет клиенту как есть.
+      responses:
+        '200':
+          description: Билет выдан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WsTicketView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     internalToken:
@@ -1072,6 +1323,13 @@ components:
         format: uuid
     StageId:
       name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NotificationId:
+      name: notificationId
       in: path
       required: true
       schema:
@@ -1842,3 +2100,263 @@ components:
           type: integer
           format: int64
           minimum: 0
+    SlaTimerKind:
+      type: string
+      description: Вид таймера (docs/system/domain-model.md, 4.4).
+      enum:
+        - STAGE_SLA
+        - DATA_CHECK_CONTROL
+        - MANAGER_ASSIGN_CONTROL
+        - TV_CONTROL
+        - ACCEPTANCE
+        - CANCEL_RESPONSE
+    SlaTimerStatus:
+      type: string
+      enum: [RUNNING, PAUSED, STOPPED]
+    PauseReason:
+      type: string
+      description: |
+        Закрытый справочник причин паузы (docs/system/sla.md, 6.1). Вручную координатор
+        ставит только `AWAIT_CLIENT_DATA`, `NO_ACCESS` и `CLIENT_RESCHEDULED`.
+      enum:
+        - REWORK
+        - AWAIT_CLIENT_SIGNATURE
+        - AWAIT_CLIENT_DATA
+        - NO_ACCESS
+        - CLIENT_RESCHEDULED
+        - CANCEL_REVIEW
+        - RECHECK_TECH
+    SlaPauseView:
+      type: object
+      required: [id, reasonCode, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reasonCode:
+          $ref: '#/components/schemas/PauseReason'
+        comment:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        limitAt:
+          type: string
+          format: date-time
+          description: Предельный срок паузы
+        extendedCount:
+          type: integer
+        setBy:
+          type: string
+          format: uuid
+          description: Пусто для системной паузы
+    SlaTimerView:
+      type: object
+      required: [id, kind, status, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/SlaTimerKind'
+        stageId:
+          type: string
+          format: uuid
+          description: Только для `kind = STAGE_SLA`
+        stageType:
+          $ref: '#/components/schemas/StageType'
+        status:
+          $ref: '#/components/schemas/SlaTimerStatus'
+        normMinutes:
+          type: integer
+          description: Норматив из `sla_norm` в минутах с признаком календаря
+        startedAt:
+          type: string
+          format: date-time
+        warnAt:
+          type: string
+          format: date-time
+          description: Момент предупреждения (25 % остатка)
+        dueAt:
+          type: string
+          format: date-time
+          description: Момент нарушения при условии, что пауз больше не будет
+        escalateAt:
+          type: string
+          format: date-time
+          description: Второй уровень эскалации
+        elapsedSlaSeconds:
+          type: integer
+          format: int64
+          description: Израсходованное рабочее время без пауз
+        remainingSlaSeconds:
+          type: integer
+          format: int64
+        calendarElapsedSeconds:
+          type: integer
+          format: int64
+          description: Календарное время с создания таймера, без вычета пауз
+        warnedAt:
+          type: string
+          format: date-time
+        breachedAt:
+          type: string
+          format: date-time
+        escalationLevel:
+          type: integer
+        overdue:
+          type: boolean
+        pause:
+          $ref: '#/components/schemas/SlaPauseView'
+    SlaView:
+      type: object
+      required: [requestId, timers, pauses]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        timers:
+          type: array
+          description: Таймеры этапов и контрольные сроки заявки
+          items:
+            $ref: '#/components/schemas/SlaTimerView'
+        pauses:
+          type: array
+          description: Журнал пауз заявки, новые сверху
+          items:
+            $ref: '#/components/schemas/SlaPauseView'
+    SlaPausePayload:
+      type: object
+      required: [reasonCode, comment, version]
+      properties:
+        reasonCode:
+          $ref: '#/components/schemas/PauseReason'
+        comment:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    SlaExtendPausePayload:
+      type: object
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    NotificationEventType:
+      type: string
+      description: Коды событий для `notification.event_type` и WebSocket (docs/system/api-contract.md, 7).
+      enum:
+        - REQUEST_SUBMITTED
+        - REQUEST_ASSIGNED
+        - STAGE_QUEUED
+        - STAGE_ASSIGNED
+        - STAGE_REASSIGN_REQUIRED
+        - STATUS_CHANGED
+        - APPROVAL_RETURNED
+        - TECH_RETURNED
+        - CONTRACT_CHANGE_REQUESTED
+        - TECH_RECHECK_REQUIRED
+        - APPROVAL_REJECTED
+        - TECH_RESULT_NONE
+        - CONTRACT_READY
+        - SERVICE_ACTIVATED
+        - DEFECT_CLAIMED
+        - ACT_SENT
+        - ACCEPTANCE_REMINDER
+        - REQUEST_CLOSED
+        - CANCEL_REQUESTED
+        - CANCEL_TERMS_READY
+        - CANCEL_RESOLVED
+        - SLA_WARNING
+        - SLA_BREACH
+        - SLA_ESCALATION
+        - PAUSE_LIMIT_WARNING
+        - PAUSE_LIMIT_REACHED
+        - CONTROL_DEADLINE_WARNING
+        - CONTROL_DEADLINE_BREACH
+        - INTEGRATION_ERROR
+        - COMPANY_CONFIRMED
+        - COMPANY_REJECTED
+        - EXPORT_READY
+    NotificationView:
+      type: object
+      required: [id, eventType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          $ref: '#/components/schemas/NotificationEventType'
+        requestId:
+          type: string
+          format: uuid
+        payload:
+          type: object
+          description: |
+            Данные для подписи без запроса к серверу: `stageId`, `stageType`, `minutesLeft`,
+            `deadlineKind`, `companyId`, `exportId` (docs/system/notifications.md, 5).
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+          description: Момент записи сигнала в канал событий
+    NotificationPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    WsTicketView:
+      type: object
+      required: [ticket, expiresIn]
+      properties:
+        ticket:
+          type: string
+          example: wst_1f2e3d4c
+          description: Одноразовый билет; сам билет в БД не хранится
+        expiresIn:
+          type: integer
+          example: 30
+    EventSignal:
+      type: object
+      description: |
+        Сигнал в канале событий и конверт сообщения WebSocket (docs/system/api-contract.md, 4.4).
+        Несёт только идентификатор, тип, заявку и короткий `payload`: данные интерфейс
+        забирает по REST.
+      required: [id, type, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор уведомления (`notification.id`)
+        type:
+          $ref: '#/components/schemas/NotificationEventType'
+        requestId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
