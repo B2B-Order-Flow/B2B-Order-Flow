@@ -41,3 +41,17 @@ export function formatMoney(value: string | number | undefined | null): string {
 export function formatSpeed(mbps: number | undefined | null): string {
   return mbps === undefined || mbps === null ? EMPTY : `${mbps} Мбит/с`;
 }
+
+const shortDateTimeFormat = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** `11.11 09:10` — для таблиц очередей, где год очевиден. */
+export function formatShortDateTime(iso: string | undefined | null): string {
+  if (!iso) return EMPTY;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? EMPTY : shortDateTimeFormat.format(date).replace(',', '');
+}
