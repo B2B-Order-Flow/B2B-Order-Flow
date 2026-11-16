@@ -1342,7 +1342,8 @@ paths:
         (`POST /stages/{stageId}/assign`). Возвращаются активные сотрудники оператора
         с ролью `role`; признак `active` нужен интерфейсу, чтобы показать состояние
         учётной записи, но для назначения неактивный пользователь не подходит
-        (docs/system/api-contract.md, 6.1).
+        (docs/system/api-contract.md, 6.1). Доступно только координатору (`COORDINATOR`);
+        другим ролям — `403 ACCESS_DENIED`.
       parameters:
         - name: role
           in: query
@@ -2471,9 +2472,11 @@ components:
     EventSignal:
       type: object
       description: |
-        Сигнал в канале событий и конверт сообщения WebSocket (docs/system/api-contract.md, 4.4).
+        Сигнал в канале событий ядро → шлюз (docs/system/api-contract.md, 4.5).
         Несёт только идентификатор события, адресата и короткий `payload`: данные интерфейс
-        забирает по REST.
+        забирает по REST. `userId` нужен шлюзу для выбора WebSocket-соединений; в браузер
+        шлюз отправляет конверт без `userId`: `id`, `type`, `requestId`, `createdAt`,
+        `payload` (docs/system/api-contract.md, 4.4).
       required: [id, type, userId, createdAt]
       properties:
         id:
