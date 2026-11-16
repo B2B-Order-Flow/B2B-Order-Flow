@@ -1,6 +1,7 @@
 import { api, newIdempotencyKey } from './client';
 import type {
   AuditEntry,
+  CommercialTermsPayload,
   CompanyDecisionRequest,
   CompanyStatus,
   CompanyView,
@@ -13,6 +14,11 @@ import type {
   RequestListQuery,
   RequestPayload,
   RequestView,
+  Role,
+  StageQueueQuery,
+  StageView,
+  TechResultPayload,
+  UserBrief,
   UserView,
 } from './types';
 
@@ -55,6 +61,29 @@ export const requestsApi = {
     api.post<RequestView>(`/requests/${requestId}/claim`, { body: { version } }),
   assignManager: (requestId: string, managerId: string, version: number) =>
     api.post<RequestView>(`/requests/${requestId}/assign-manager`, { body: { managerId, version } }),
+  // Неделя 2 (api-contract.md §6.2, 6.5, 6.13)
+  commercialTerms: (requestId: string, body: CommercialTermsPayload) =>
+    api.post<RequestView>(`/requests/${requestId}/commercial-terms`, { body }),
+  acceptOffer: (requestId: string, version: number) =>
+    api.post<RequestView>(`/requests/${requestId}/contract/accept-offer`, { body: { version } }),
+};
+
+// Этапы — неделя 2 (api-contract.md §6.4, 6.13).
+export const stagesApi = {
+  queue: (query: StageQueueQuery) => api.get<Page<StageView>>('/stages', { query: { ...query } }),
+  my: () => api.get<Page<StageView>>('/stages/my'),
+  claim: (stageId: string, version: number) => api.post<StageView>(`/stages/${stageId}/claim`, { body: { version } }),
+  assign: (stageId: string, assigneeId: string, version: number) =>
+    api.post<StageView>(`/stages/${stageId}/assign`, { body: { assigneeId, version } }),
+  techResult: (stageId: string, body: TechResultPayload) =>
+    api.post<StageView>(`/stages/${stageId}/tech-result`, { body }),
+  returnToManager: (stageId: string, comment: string, version: number) =>
+    api.post<StageView>(`/stages/${stageId}/return`, { body: { comment, version } }),
+};
+
+// Сотрудники оператора с ролью — для назначения менеджера и исполнителя (api-contract.md §6.1).
+export const usersApi = {
+  byRole: (role: Role) => api.get<Page<UserBrief>>('/users', { query: { role, size: 100 } }),
 };
 
 // Ключи кэша TanStack Query: одно место, чтобы инвалидировать согласованно.
@@ -66,4 +95,8 @@ export const queryKeys = {
   requestsAll: ['requests'] as const,
   request: (requestId: string) => ['request', requestId] as const,
   history: (requestId: string, query: object) => ['request', requestId, 'history', query] as const,
+  stagesQueue: (query: object) => ['stages', 'queue', query] as const,
+  stagesMy: ['stages', 'my'] as const,
+  stagesAll: ['stages'] as const,
+  usersByRole: (role: string) => ['users', role] as const,
 };

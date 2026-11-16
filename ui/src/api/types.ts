@@ -186,7 +186,8 @@ export interface RequestView {
 }
 
 export interface RequestListQuery extends PageQuery {
-  status?: RequestStatus;
+  /** Один статус или несколько (ui-requirements.md §6.5: фильтр по нескольким статусам). */
+  status?: RequestStatus | RequestStatus[];
   companyId?: string;
   managerId?: string;
   unassigned?: boolean;
@@ -207,4 +208,90 @@ export interface AuditEntry {
   toStatus?: string;
   comment?: string;
   details?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Неделя 2: этапы, коммерческие условия, результат ТВ (api-contract.md §6.4, 6.13, 10.7–10.8).
+// В external-api.yaml этих операций ещё нет: поля взяты из api-contract.md и domain-model.md
+// (request_stage, sla_timer). Когда контракт сольют, сверить и поправить здесь.
+
+export const STAGE_TYPES = [
+  'TECH_CHECK',
+  'RECHECK_TECH',
+  'LEGAL_APPROVAL',
+  'FINANCE_APPROVAL',
+  'PROCUREMENT_APPROVAL',
+  'MGMT_APPROVAL',
+  'CONTRACT_SIGNING',
+  'CONSTRUCTION',
+  'INSTALLATION',
+  'ACTIVATION',
+  'REMEDIATION',
+  'CLOSING',
+] as const;
+
+export type StageType = (typeof STAGE_TYPES)[number];
+export type StageStatus = 'QUEUED' | 'IN_PROGRESS' | 'DONE' | 'RETURNED' | 'REJECTED' | 'SUPERSEDED' | 'CANCELLED';
+export type SlaTimerStatus = 'RUNNING' | 'PAUSED' | 'STOPPED';
+export type TechResult = 'AVAILABLE' | 'WITH_CONSTRUCTION' | 'NONE';
+
+/** Таймер срока этапа (domain-model.md, sla_timer). */
+export interface SlaTimerView {
+  normMinutes: number;
+  status: SlaTimerStatus;
+  /** WORK — рабочие дни (8 ч), CALENDAR — календарные (sla_norm.calendar_kind). */
+  calendarKind?: 'WORK' | 'CALENDAR';
+  startedAt: string;
+  warnAt?: string;
+  dueAt?: string;
+  elapsedSlaSeconds: number;
+  pauseCount?: number;
+}
+
+/** Этап заявки (domain-model.md, request_stage) с полями заявки для таблиц очереди. */
+export interface StageView {
+  id: string;
+  requestId: string;
+  requestNumber?: string;
+  companyName?: string;
+  address?: string;
+  type: StageType;
+  status: StageStatus;
+  queueRole: Role;
+  assigneeId?: string;
+  needsReassignment?: boolean;
+  version: number;
+  createdAt: string;
+  takenAt?: string;
+  finishedAt?: string;
+  sla?: SlaTimerView;
+}
+
+export interface StageQueueQuery extends PageQuery {
+  queueRole: Role;
+  status?: StageStatus;
+}
+
+export interface CommercialTermsPayload {
+  tariffType: TariffType;
+  contractType: ContractType;
+  discountPercent?: string;
+  speedMbps?: number;
+  version: number;
+}
+
+export interface TechResultPayload {
+  result: TechResult;
+  capex?: string;
+  constructionDays?: number;
+  reasonCode?: string;
+  comment?: string;
+  version: number;
+}
+
+/** Сотрудник оператора для выбора исполнителя (GET /users?role=…, api-contract.md §6.1). */
+export interface UserBrief {
+  id: string;
+  login: string;
+  fullName: string;
 }
