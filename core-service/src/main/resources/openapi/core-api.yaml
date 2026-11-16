@@ -66,6 +66,8 @@ tags:
     description: Уведомления пользователя
   - name: Events
     description: Канал событий для шлюза и билет WebSocket
+  - name: Users
+    description: Сотрудники оператора для назначения исполнителей
 paths:
   /internal/v1/auth/register:
     post:
@@ -1258,10 +1260,10 @@ paths:
       summary: Канал событий ядро → шлюз (Server-Sent Events)
       description: |
         Постоянное соединение, которое шлюз открывает при старте (docs/system/api-contract.md, 4.5).
-        Каждое событие — строка `data: <JSON EventSignal>`; данные в сигнале не передаются,
-        клиент забирает их по REST. После коммита транзакции перехода ядро отправляет сигнал
-        и ставит `notification.published_at`. При подключении сначала уходят записи с пустым
-        `published_at` и записи после `Last-Event-ID`, затем новые.
+        Каждое событие — строка `data: <JSON EventSignal>`; в сигнале только идентификатор
+        события и адресат `userId`, данные клиент забирает по REST. После коммита транзакции
+        перехода ядро отправляет сигнал и ставит `notification.published_at`. При подключении
+        сначала уходят записи с пустым `published_at` и записи после `Last-Event-ID`, затем новые.
       parameters:
         - name: Last-Event-ID
           in: header
@@ -1272,11 +1274,11 @@ paths:
             format: date-time
       responses:
         '200':
-          description: Поток `text/event-stream`; в `data:` — JSON `EventSignal`
+          description: Поток `text/event-stream`; в каждой строке `data:` — JSON `EventSignal`
           content:
             text/event-stream:
               schema:
-                type: string
+                $ref: '#/components/schemas/EventSignal'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -1288,8 +1290,9 @@ paths:
       summary: Одноразовый билет для WebSocket
       description: |
         Билет выдаётся аутентифицированному пользователю, живёт 30 секунд, привязан к
-        пользователю и активной роли и проверяется ядром при установке соединения
-        (docs/system/api-contract.md, 4.4). Шлюз передаёт билет клиенту как есть.
+        пользователю и активной роли. Шлюз передаёт билет клиенту как есть, а при установке
+        соединения проверяет его через `POST /internal/v1/ws/ticket/redeem`
+        (docs/system/api-contract.md, 4.4).
       responses:
         '200':
           description: Билет выдан
@@ -1299,6 +1302,67 @@ paths:
                 $ref: '#/components/schemas/WsTicketView'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/ws/ticket/redeem:
+    post:
+      operationId: redeemWsTicket
+      tags: [Events]
+      summary: Проверить билет WebSocket при установке соединения
+      description: |
+        Шлюз передаёт билет ядру перед установкой соединения. Билет одноразовый: повторная
+        проверка, истёкший или неизвестный билет — `401 UNAUTHORIZED`. Ответ содержит
+        пользователя и активную роль, к которой привязан билет; по ним шлюз регистрирует
+        соединение и адресует сигналы (docs/system/api-contract.md, 4.4).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WsTicketRedeemPayload'
+      responses:
+        '200':
+          description: Билет действителен и помечен использованным
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WsTicketRedeemView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/users:
+    get:
+      operationId: listOperatorUsers
+      tags: [Users]
+      summary: Сотрудники оператора с ролью
+      description: |
+        Список для выбора исполнителя: координатор назначает менеджера заявки
+        (`POST /requests/{requestId}/assign-manager`) и исполнителя этапа
+        (`POST /stages/{stageId}/assign`). Возвращаются активные сотрудники оператора
+        с ролью `role`; признак `active` нужен интерфейсу, чтобы показать состояние
+        учётной записи, но для назначения неактивный пользователь не подходит
+        (docs/system/api-contract.md, 6.1).
+      parameters:
+        - name: role
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница сотрудников
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorUserPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '500':
           $ref: '#/components/responses/InternalError'
 components:
@@ -2337,13 +2401,60 @@ components:
         expiresIn:
           type: integer
           example: 30
+    WsTicketRedeemPayload:
+      type: object
+      required: [ticket]
+      properties:
+        ticket:
+          type: string
+          example: wst_1f2e3d4c
+    WsTicketRedeemView:
+      type: object
+      required: [userId, activeRole]
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Пользователь, к которому привязан билет
+        activeRole:
+          $ref: '#/components/schemas/Role'
+    OperatorUserView:
+      type: object
+      required: [id, login, fullName, operatorRoles, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        login:
+          type: string
+          example: a.smirnova
+        fullName:
+          type: string
+          example: Анна Смирнова
+        operatorRoles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        active:
+          type: boolean
+          description: Учётная запись действует; для назначения неактивный пользователь недопустим
+    OperatorUserPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperatorUserView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
     EventSignal:
       type: object
       description: |
         Сигнал в канале событий и конверт сообщения WebSocket (docs/system/api-contract.md, 4.4).
-        Несёт только идентификатор, тип, заявку и короткий `payload`: данные интерфейс
+        Несёт только идентификатор события, адресата и короткий `payload`: данные интерфейс
         забирает по REST.
-      required: [id, type, createdAt]
+      required: [id, type, userId, createdAt]
       properties:
         id:
           type: string
@@ -2354,6 +2465,10 @@ components:
         requestId:
           type: string
           format: uuid
+        userId:
+          type: string
+          format: uuid
+          description: Получатель сигнала (`notification.recipient_user_id`); шлюз рассылает сигнал по соединениям этого пользователя
         createdAt:
           type: string
           format: date-time
