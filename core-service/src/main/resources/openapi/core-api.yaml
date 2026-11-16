@@ -1628,9 +1628,13 @@ components:
         kpp:
           type: string
           maxLength: 9
+          pattern: '^\d{9}$'
+          description: 9 цифр (docs/system/api-contract.md, 10.4)
         ogrn:
           type: string
           maxLength: 15
+          pattern: '^(\d{13}|\d{15})$'
+          description: 13 цифр для организации, 15 — для ИП
         legalAddress:
           type: string
           maxLength: 500
@@ -2166,12 +2170,15 @@ components:
           minimum: 0
     SlaTimerKind:
       type: string
-      description: Вид таймера (docs/system/domain-model.md, 4.4).
+      description: |
+        Вид таймера. Те же значения используются в `payload.deadlineKind` событий
+        `CONTROL_DEADLINE_*` (docs/system/api-contract.md, раздел 7), чтобы интерфейсу
+        не приходилось сопоставлять два набора имён.
       enum:
         - STAGE_SLA
-        - DATA_CHECK_CONTROL
-        - MANAGER_ASSIGN_CONTROL
-        - TV_CONTROL
+        - DATA_CHECK
+        - MANAGER_ASSIGNMENT
+        - TECH_RESULT
         - ACCEPTANCE
         - CANCEL_RESPONSE
     SlaTimerStatus:
