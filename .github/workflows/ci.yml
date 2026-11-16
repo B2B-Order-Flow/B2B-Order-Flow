@@ -75,6 +75,9 @@ jobs:
       - name: Unit-тесты (Vitest)
         run: npm test
 
+      - name: Сборка (Vite)
+        run: npm run build
+
   core:
     name: Тесты core-service
     runs-on: ubuntu-latest
