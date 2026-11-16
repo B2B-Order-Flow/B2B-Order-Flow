@@ -122,10 +122,191 @@ paths:
       security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/RequestId'}]
       responses: {'200': {description: Request history}}
+  /api/v1/requests/{requestId}/commercial-terms:
+    post:
+      operationId: commercialTerms
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CommercialTermsCommand'}}}}
+      responses: {'200': {description: Commercial terms saved}}
+  /api/v1/requests/{requestId}/contract/sent:
+    post:
+      operationId: contractSent
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Contract sent}}
+  /api/v1/requests/{requestId}/contract/concluded:
+    post:
+      operationId: contractConcluded
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ContractConcludedCommand'}}}}
+      responses: {'200': {description: Contract concluded}}
+  /api/v1/requests/{requestId}/contract/accept-offer:
+    post:
+      operationId: acceptOffer
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Offer accepted}}
+  /api/v1/requests/{requestId}/act/sent:
+    post:
+      operationId: actSent
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Act sent}}
+  /api/v1/requests/{requestId}/act/signed:
+    post:
+      operationId: actSigned
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Act signed}}
+  /api/v1/requests/{requestId}/close-by-default:
+    post:
+      operationId: closeByDefault
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Request closed}}
+  /api/v1/stages:
+    get:
+      operationId: listStages
+      security: [{bearerAuth: []}]
+      responses: {'200': {description: Stage queue}}
+  /api/v1/stages/my:
+    get:
+      operationId: myStages
+      security: [{bearerAuth: []}]
+      responses: {'200': {description: Current user's stages}}
+  /api/v1/stages/{stageId}/claim:
+    post:
+      operationId: claimStage
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Stage claimed}}
+  /api/v1/stages/{stageId}/assign:
+    post:
+      operationId: assignStage
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssignStageCommand'}}}}
+      responses: {'200': {description: Stage assigned}}
+  /api/v1/stages/{stageId}/tech-result:
+    post:
+      operationId: techResult
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TechResultCommand'}}}}
+      responses: {'200': {description: Technical result saved}}
+  /api/v1/stages/{stageId}/complete:
+    post:
+      operationId: completeStage
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Stage completed}}
+  /api/v1/stages/{stageId}/activate:
+    post:
+      operationId: activateStage
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Service activated}}
+  /api/v1/requests/{requestId}/sla:
+    get:
+      operationId: requestSla
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/RequestId'}]
+      responses: {'200': {description: SLA information}}
+  /api/v1/stages/{stageId}/sla/pause:
+    post:
+      operationId: pauseSla
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PauseCommand'}}}}
+      responses: {'200': {description: SLA paused}}
+  /api/v1/stages/{stageId}/sla/resume:
+    post:
+      operationId: resumeSla
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: SLA resumed}}
+  /api/v1/stages/{stageId}/sla/extend-pause:
+    post:
+      operationId: extendSlaPause
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/StageId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SlaExtendPauseCommand'}}}}
+      responses: {'200': {description: SLA pause extended}}
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      security: [{bearerAuth: []}]
+      responses: {'200': {description: Notifications}}
+  /api/v1/notifications/{notificationId}/read:
+    post:
+      operationId: readNotification
+      security: [{bearerAuth: []}]
+      parameters: [{ $ref: '#/components/parameters/NotificationId'}]
+      responses: {'204': {description: Notification read}}
+  /api/v1/notifications/read-all:
+    post:
+      operationId: readAllNotifications
+      security: [{bearerAuth: []}]
+      responses: {'204': {description: Notifications read}}
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      security: [{bearerAuth: []}]
+      responses: {'200': {description: Users}}
+  /api/v1/ws/ticket:
+    get:
+      operationId: issueWebsocketTicket
+      security: [{bearerAuth: []}]
+      responses: {'200': {description: WebSocket ticket}}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   schemas:
+    CommercialTermsCommand:
+      type: object
+      required: [tariffType, contractType, version]
+      properties:
+        tariffType: {type: string}
+        contractType: {type: string}
+        discountPercent: {type: string, pattern: '^[0-9]{1,3}\.[0-9]{2}$'}
+        speedMbps: {type: integer, minimum: 1, maximum: 100000}
+        version: {type: integer, minimum: 0}
+    ContractConcludedCommand:
+      type: object
+      required: [contractNumber, concludedAt, version]
+      properties:
+        contractNumber: {type: string, maxLength: 100}
+        concludedAt: {type: string, format: date}
+        version: {type: integer, minimum: 0}
+    SlaExtendPauseCommand:
+      type: object
+      required: [comment, version]
+      properties:
+        comment: {type: string, maxLength: 4000}
+        version: {type: integer, minimum: 0}
+    AssignStageCommand:
+      type: object
+      required: [assigneeId, version]
+      properties: {assigneeId: {type: string, format: uuid}, version: {type: integer, minimum: 0}}
+    TechResultCommand:
+      type: object
+      required: [result, version]
+      properties: {result: {type: string}, capex: {type: string}, constructionDays: {type: integer}, reasonCode: {type: string}, comment: {type: string}, version: {type: integer, minimum: 0}}
+    PauseCommand:
+      type: object
+      required: [reasonCode, comment, version]
+      properties: {reasonCode: {type: string}, comment: {type: string, maxLength: 4000}, version: {type: integer, minimum: 0}}
     VersionCommand:
       type: object
       required: [version]
@@ -141,6 +322,8 @@ components:
     ActiveRole: {name: X-Active-Role, in: header, required: false, schema: {type: string, maxLength: 50}}
     IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, maxLength: 100}}
     RequestId: {name: requestId, in: path, required: true, schema: {type: string, format: uuid}}
+    StageId: {name: stageId, in: path, required: true, schema: {type: string, format: uuid}}
+    NotificationId: {name: notificationId, in: path, required: true, schema: {type: string, format: uuid}}
     CompanyId: {name: companyId, in: path, required: true, schema: {type: string, format: uuid}}
     Page: {name: page, in: query, required: false, schema: {type: integer, minimum: 0, default: 0}}
     Size: {name: size, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}

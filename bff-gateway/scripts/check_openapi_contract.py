@@ -5,6 +5,11 @@ from pathlib import Path
 
 import yaml
 
+EXCLUDED_CORE_OPERATIONS = {
+    ("/internal/v1/events/stream", "get"),
+    ("/internal/v1/ws/ticket/redeem", "post"),
+}
+
 
 def operations(document: dict, public: bool = False) -> set[tuple[str, str]]:
     return {
@@ -13,6 +18,41 @@ def operations(document: dict, public: bool = False) -> set[tuple[str, str]]:
         for method in item
         if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
     }
+
+
+def validate_public_contract(document: dict) -> list[str]:
+    parameters = document.get("components", {}).get("parameters", {})
+
+    def resolve_parameter(parameter: dict) -> dict:
+        reference = parameter.get("$ref", "")
+        if reference.startswith("#/components/parameters/"):
+            return parameters.get(reference.rsplit("/", 1)[-1], {})
+        return parameter
+
+    errors = []
+    for path, item in document.get("paths", {}).items():
+        path_parameters = {
+            resolve_parameter(parameter).get("name")
+            for parameter in item.get("parameters", [])
+            if resolve_parameter(parameter).get("in") == "path"
+        }
+        placeholders = {
+            segment[1:-1] for segment in path.split("/") if segment.startswith("{") and segment.endswith("}")
+        }
+        for method, operation in item.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete", "head", "options", "trace"}:
+                continue
+            operation_parameters = {
+                resolve_parameter(parameter).get("name")
+                for parameter in operation.get("parameters", [])
+                if resolve_parameter(parameter).get("in") == "path"
+            }
+            if placeholders - path_parameters - operation_parameters:
+                missing = ", ".join(sorted(placeholders - path_parameters - operation_parameters))
+                errors.append(f"{method.upper()} {path}: missing path parameter(s): {missing}")
+            if not operation.get("security") and not path.startswith("/api/v1/auth/"):
+                errors.append(f"{method.upper()} {path}: missing security declaration")
+    return errors
 
 
 def main() -> int:
@@ -30,7 +70,13 @@ def main() -> int:
         core = yaml.safe_load(file)
 
     bff_operations = operations(bff, public=True)
-    core_operations = operations(core)
+    contract_errors = validate_public_contract(bff)
+    if contract_errors:
+        print("Invalid BFF contract:")
+        for error in contract_errors:
+            print(f"  {error}")
+        return 1
+    core_operations = operations(core) - EXCLUDED_CORE_OPERATIONS
     missing_in_core = bff_operations - core_operations
     missing_in_bff = core_operations - bff_operations
     if missing_in_core or missing_in_bff:
