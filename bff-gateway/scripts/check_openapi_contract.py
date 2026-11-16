@@ -5,6 +5,11 @@ from pathlib import Path
 
 import yaml
 
+EXCLUDED_CORE_OPERATIONS = {
+    ("/internal/v1/events/stream", "get"),
+    ("/internal/v1/ws/ticket/redeem", "post"),
+}
+
 
 def operations(document: dict, public: bool = False) -> set[tuple[str, str]]:
     return {
@@ -30,7 +35,7 @@ def main() -> int:
         core = yaml.safe_load(file)
 
     bff_operations = operations(bff, public=True)
-    core_operations = operations(core)
+    core_operations = operations(core) - EXCLUDED_CORE_OPERATIONS
     missing_in_core = bff_operations - core_operations
     missing_in_bff = core_operations - bff_operations
     if missing_in_core or missing_in_bff:

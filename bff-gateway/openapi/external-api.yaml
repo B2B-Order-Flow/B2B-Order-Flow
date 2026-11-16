@@ -122,10 +122,131 @@ paths:
       security: [{bearerAuth: []}]
       parameters: [{ $ref: '#/components/parameters/RequestId'}]
       responses: {'200': {description: Request history}}
+  /api/v1/requests/{requestId}/commercial-terms:
+    post:
+      operationId: commercialTerms
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Commercial terms saved}}
+  /api/v1/requests/{requestId}/contract/sent:
+    post:
+      operationId: contractSent
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Contract sent}}
+  /api/v1/requests/{requestId}/contract/concluded:
+    post:
+      operationId: contractConcluded
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [contractNumber, concludedAt, version]}}}}
+      responses: {'200': {description: Contract concluded}}
+  /api/v1/requests/{requestId}/contract/accept-offer:
+    post:
+      operationId: acceptOffer
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Offer accepted}}
+  /api/v1/requests/{requestId}/act/sent:
+    post:
+      operationId: actSent
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Act sent}}
+  /api/v1/requests/{requestId}/act/signed:
+    post:
+      operationId: actSigned
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Act signed}}
+  /api/v1/requests/{requestId}/close-by-default:
+    post:
+      operationId: closeByDefault
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Request closed}}
+  /api/v1/stages:
+    get:
+      operationId: listStages
+      responses: {'200': {description: Stage queue}}
+  /api/v1/stages/my:
+    get:
+      operationId: myStages
+      responses: {'200': {description: Current user's stages}}
+  /api/v1/stages/{stageId}/claim:
+    post:
+      operationId: claimStage
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Stage claimed}}
+  /api/v1/stages/{stageId}/assign:
+    post:
+      operationId: assignStage
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssignStageCommand'}}}}
+      responses: {'200': {description: Stage assigned}}
+  /api/v1/stages/{stageId}/tech-result:
+    post:
+      operationId: techResult
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TechResultCommand'}}}}
+      responses: {'200': {description: Technical result saved}}
+  /api/v1/stages/{stageId}/complete:
+    post:
+      operationId: completeStage
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Stage completed}}
+  /api/v1/stages/{stageId}/activate:
+    post:
+      operationId: activateStage
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Service activated}}
+  /api/v1/requests/{requestId}/sla:
+    get:
+      operationId: requestSla
+      responses: {'200': {description: SLA information}}
+  /api/v1/stages/{stageId}/sla/pause:
+    post:
+      operationId: pauseSla
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PauseCommand'}}}}
+      responses: {'200': {description: SLA paused}}
+  /api/v1/stages/{stageId}/sla/resume:
+    post:
+      operationId: resumeSla
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: SLA resumed}}
+  /api/v1/stages/{stageId}/sla/extend-pause:
+    post:
+      operationId: extendSlaPause
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PauseCommand'}}}}
+      responses: {'200': {description: SLA pause extended}}
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      responses: {'200': {description: Notifications}}
+  /api/v1/notifications/{notificationId}/read:
+    post:
+      operationId: readNotification
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Notification read}}
+  /api/v1/notifications/read-all:
+    post:
+      operationId: readAllNotifications
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VersionCommand'}}}}
+      responses: {'200': {description: Notifications read}}
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      responses: {'200': {description: Users}}
+  /api/v1/ws/ticket:
+    get:
+      operationId: issueWebsocketTicket
+      responses: {'200': {description: WebSocket ticket}}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   schemas:
+    AssignStageCommand:
+      type: object
+      required: [assigneeId, version]
+      properties: {assigneeId: {type: string, format: uuid}, version: {type: integer, minimum: 0}}
+    TechResultCommand:
+      type: object
+      required: [result, version]
+      properties: {result: {type: string}, capex: {type: string}, constructionDays: {type: integer}, reasonCode: {type: string}, comment: {type: string}, version: {type: integer, minimum: 0}}
+    PauseCommand:
+      type: object
+      required: [reasonCode, comment, version]
+      properties: {reasonCode: {type: string}, comment: {type: string, maxLength: 4000}, version: {type: integer, minimum: 0}}
     VersionCommand:
       type: object
       required: [version]
