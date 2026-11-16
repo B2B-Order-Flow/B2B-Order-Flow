@@ -1,19 +1,30 @@
 from datetime import date
-from decimal import Decimal
 from enum import StrEnum
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class Command(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=0)
 
 
+class TariffType(StrEnum):
+    STANDARD = "STANDARD"
+    INDIVIDUAL = "INDIVIDUAL"
+
+
+class ContractType(StrEnum):
+    OFFER = "OFFER"
+    STANDARD = "STANDARD"
+    CLIENT_FORM = "CLIENT_FORM"
+
+
 class CommercialTerms(Command):
-    tariffType: str
-    contractType: str
-    discountPercent: Decimal | None = Field(default=None, ge=0, le=100)
+    tariffType: TariffType
+    contractType: ContractType
+    discountPercent: str | None = Field(default=None, pattern=r"^[0-9]{1,3}\.[0-9]{2}$")
     speedMbps: int | None = Field(default=None, ge=1, le=100000)
 
 
@@ -25,7 +36,7 @@ class TechResult(StrEnum):
 
 class TechResultCommand(Command):
     result: TechResult
-    capex: Decimal | None = Field(default=None, ge=0)
+    capex: str | None = Field(default=None, pattern=r"^[0-9]+\.[0-9]{2}$")
     constructionDays: int | None = Field(default=None, ge=1)
     reasonCode: str | None = None
     comment: str | None = Field(default=None, max_length=4000)
@@ -44,7 +55,7 @@ class DecisionCommand(Command):
 
 
 class AssignStageCommand(Command):
-    assigneeId: str
+    assigneeId: UUID
 
 
 class ContractConcludedCommand(Command):
@@ -54,4 +65,8 @@ class ContractConcludedCommand(Command):
 
 class PauseCommand(Command):
     reasonCode: str
+    comment: str = Field(max_length=4000)
+
+
+class ExtendPauseCommand(Command):
     comment: str = Field(max_length=4000)

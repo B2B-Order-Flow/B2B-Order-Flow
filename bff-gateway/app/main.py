@@ -4,7 +4,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, Request
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -18,7 +18,7 @@ from .models import (
     Command,
     CommercialTerms,
     ContractConcludedCommand,
-    DecisionCommand,
+    ExtendPauseCommand,
     PauseCommand,
     TechResultCommand,
 )
@@ -232,21 +232,6 @@ async def commercial_terms(request_id: str, request: Request, client: CoreClient
     )
 
 
-@app.get("/api/v1/requests/{request_id}/offers", operation_id="list_offers")
-async def list_offers(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/offers")
-
-
-@app.post("/api/v1/requests/{request_id}/offers", operation_id="add_offer")
-async def add_offer(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, f"/api/v1/requests/{request_id}/offers")
-
-
-@app.post("/api/v1/requests/{request_id}/offers/{offer_id}/select", operation_id="select_offer")
-async def select_offer(request_id: str, offer_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, f"/api/v1/requests/{request_id}/offers/{offer_id}/select")
-
-
 @app.get("/api/v1/stages", operation_id="list_stages")
 async def list_stages(request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(request, client, "GET", "/api/v1/stages")
@@ -283,17 +268,6 @@ async def tech_result(stage_id: str, request: Request, client: CoreClient = Depe
         "POST",
         f"/api/v1/stages/{stage_id}/tech-result",
         body=await validated_body(request, TechResultCommand),
-    )
-
-
-@app.post("/api/v1/stages/{stage_id}/decision", operation_id="stage_decision")
-async def stage_decision(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await proxy(
-        request,
-        client,
-        "POST",
-        f"/api/v1/stages/{stage_id}/decision",
-        body=await validated_body(request, DecisionCommand),
     )
 
 
@@ -364,7 +338,7 @@ async def resume_stage_sla(stage_id: str, request: Request, client: CoreClient =
 
 @app.post("/api/v1/stages/{stage_id}/sla/extend-pause", operation_id="extend_stage_sla_pause")
 async def extend_stage_sla_pause(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, f"/api/v1/stages/{stage_id}/sla/extend-pause", PauseCommand)
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/sla/extend-pause", ExtendPauseCommand)
 
 
 @app.get("/api/v1/notifications", operation_id="list_notifications")
@@ -374,15 +348,14 @@ async def list_notifications(request: Request, client: CoreClient = Depends(get_
 
 @app.post("/api/v1/notifications/{notification_id}/read", operation_id="read_notification")
 async def read_notification(notification_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await proxy(
-        request,
-        client,
-        "POST",
-        f"/api/v1/notifications/{notification_id}/read",
-        body=await validated_body(request, Command),
-    )
+    return await proxy(request, client, "POST", f"/api/v1/notifications/{notification_id}/read")
 
 
 @app.post("/api/v1/notifications/read-all", operation_id="read_all_notifications")
 async def read_all_notifications(request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, "/api/v1/notifications/read-all")
+    return await proxy(request, client, "POST", "/api/v1/notifications/read-all")
+
+
+@app.get("/api/v1/users", operation_id="list_users")
+async def list_users(request: Request, role: str = Query(...), client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/users")
