@@ -101,3 +101,129 @@ async def test_openapi_requires_bearer_header():
     assert unauthorized.status_code == 401
     assert authorized.status_code == 200
     assert "/api/v1/requests" in authorized.json()["paths"]
+
+
+@pytest.mark.asyncio
+async def test_week_two_command_validation_returns_problem():
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"ok": True})),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            response = await api.post("/api/v1/stages/stage-1/tech-result", json={"version": -1, "result": "UNKNOWN"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_commercial_terms_accepts_camel_case_fields():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["body"] = request.content
+        return httpx.Response(200, json={"version": 2})
+
+    transport = httpx.MockTransport(handler)
+
+    async def override() -> CoreClient:
+        return CoreClient(Settings(core_url="http://core.test", internal_token="test-token"), transport=transport)
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        api_transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=api_transport, base_url="http://test") as api:
+            response = await api.post(
+                "/api/v1/requests/request-1/commercial-terms",
+                json={"tariffType": "STANDARD", "contractType": "OFFER", "version": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["path"] == "/internal/v1/requests/request-1/commercial-terms"
+    assert b'"tariffType":"STANDARD"' in captured["body"]
+
+
+@pytest.mark.asyncio
+async def test_notifications_commands_forward_without_body():
+    captured = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append((request.url.path, request.content))
+        return httpx.Response(204)
+
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(handler),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            read = await api.post("/api/v1/notifications/notification-1/read")
+            read_all = await api.post("/api/v1/notifications/read-all")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert read.status_code == 204
+    assert read_all.status_code == 204
+    assert captured == [
+        ("/internal/v1/notifications/notification-1/read", b""),
+        ("/internal/v1/notifications/read-all", b""),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_extend_pause_validates_contract_body():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.content
+        return httpx.Response(200, json={"ok": True})
+
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(handler),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            valid = await api.post(
+                "/api/v1/stages/stage-1/sla/extend-pause",
+                json={"comment": "need more time", "version": 1},
+            )
+            invalid = await api.post(
+                "/api/v1/stages/stage-1/sla/extend-pause",
+                json={"reasonCode": "OTHER", "comment": "need more time", "version": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert valid.status_code == 200
+    assert b'"comment":"need more time"' in captured["body"]
+    assert invalid.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_removed_week_three_routes_are_not_available():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+        response = await api.get("/api/v1/requests/request-1/offers")
+        decision = await api.post("/api/v1/stages/stage-1/decision", json={"version": 1})
+
+    assert response.status_code == 404
+    assert decision.status_code == 404
