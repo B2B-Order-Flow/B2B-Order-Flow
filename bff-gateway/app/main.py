@@ -4,7 +4,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -23,7 +23,6 @@ from .models import (
     TechResultCommand,
 )
 from .proxy import proxy
-from .websocket import WebSocketHub, websocket_session
 
 logger = logging.getLogger("bff-gateway")
 logging.basicConfig(
@@ -34,13 +33,8 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    hub = WebSocketHub(get_settings())
-    app.state.websocket_hub = hub
-    await hub.start()
-    try:
-        yield
-    finally:
-        await hub.stop()
+    get_settings()
+    yield
 
 
 app = FastAPI(
@@ -55,32 +49,6 @@ app.middleware("http")(correlation_middleware)
 app.add_exception_handler(CoreClientError, core_client_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, internal_error_handler)
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    ticket = websocket.query_params.get("ticket")
-    if not ticket:
-        await websocket.close(code=1008, reason="ticket is required")
-        return
-    client = CoreClient(get_settings())
-    try:
-        response = await client.request(
-            "POST", "/internal/v1/ws/ticket/redeem", correlation_id_context.get(), json={"ticket": ticket}
-        )
-    except CoreClientError:
-        await websocket.close(code=1013, reason="core unavailable")
-        return
-    if response.status_code >= 400:
-        await websocket.close(code=1008, reason="invalid ticket")
-        return
-    try:
-        user_id = response.json()["userId"]
-        hub: WebSocketHub = getattr(app.state, "websocket_hub", WebSocketHub(get_settings()))
-        await websocket_session(websocket, hub, user_id)
-    except (KeyError, ValueError, json.JSONDecodeError, WebSocketDisconnect):
-        await websocket.close(code=1011, reason="invalid ticket response")
 
 
 @app.middleware("http")
