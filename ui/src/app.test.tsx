@@ -39,13 +39,13 @@ describe('каркас приложения', () => {
     await user.type(screen.getByTestId('login-password'), 'secret-password');
     await user.click(screen.getByTestId('login-submit'));
 
-    expect(await screen.findByTestId('placeholder-ui-12')).toBeInTheDocument();
+    expect(await screen.findByTestId('my-tasks-page')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/my-tasks');
     expect(sessionStore.getActiveRole()).toBe('TECH_SPECIALIST');
 
-    // Переключаем роль: Select MUI открывается по mouseDown
-    await user.click(screen.getByRole('combobox', { name: texts.session.roleSwitcher }));
-    await user.click(await screen.findByRole('option', { name: texts.roles.ENGINEER }));
+    // Переключаем роль: «таблетка» с ролью в шапке открывает меню ролей
+    await user.click(screen.getByTestId('role-switcher'));
+    await user.click(await screen.findByRole('menuitem', { name: texts.roles.ENGINEER }));
 
     expect(sessionStore.getActiveRole()).toBe('ENGINEER');
     expect(router.state.location.pathname).toBe('/my-tasks');
