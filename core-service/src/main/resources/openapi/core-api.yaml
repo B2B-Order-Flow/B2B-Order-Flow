@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: B2B-Order-Flow Core API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Внутренний контракт транзакционного ядра B2B-Order-Flow. Единственный источник истины
     для API: серверные интерфейсы генерируются из этого файла (`openapi-generator`), контроллеры
@@ -35,6 +35,12 @@ info:
     ## Что решает ядро
     Бизнес-валидация, права, статусы, принадлежность компании и фильтрация полей по роли.
     BFF проксирует ответ без фильтрации.
+
+    ## Неделя 2
+    Контракт недели 2 покрывает переходы SC-01: T04, T05, T07, T13, T14, T16, T18
+    (docs/plan-week2.md, раздел 2). Согласования, стройка, доработка, отмена и повторная
+    техническая возможность появятся на неделе 3: их эндпоинтов здесь нет, а результат ТВ
+    `WITH_CONSTRUCTION` до недели 3 отклоняется с `409 ILLEGAL_TRANSITION`.
 servers:
   - url: http://core-service:8080
     description: Приватная сеть Docker Compose
@@ -50,6 +56,18 @@ tags:
     description: Администрирование компаний
   - name: Requests
     description: Заявки и их переходы
+  - name: Workflow
+    description: Переходы заявки недели 2 (T04, T05, T07, T13, T18)
+  - name: Stages
+    description: Очередь роли и команды этапов
+  - name: Sla
+    description: Таймеры SLA этапов и заявки, паузы
+  - name: Notifications
+    description: Уведомления пользователя
+  - name: Events
+    description: Канал событий для шлюза и билет WebSocket
+  - name: Users
+    description: Сотрудники оператора для назначения исполнителей
 paths:
   /internal/v1/auth/register:
     post:
@@ -537,6 +555,817 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+  /internal/v1/requests/{requestId}/commercial-terms:
+    post:
+      operationId: setCommercialTerms
+      tags: [Workflow]
+      summary: Зафиксировать коммерческие условия и отправить в работу (T04)
+      description: |
+        Менеджер заявки фиксирует тариф, скидку и тип договора. Заявка переходит
+        `WITH_MANAGER → TECH_CHECK`, строится предварительный маршрут (R-01…R-04, R-07),
+        в очередь `TECH_SPECIALIST` создаётся этап `TECH_CHECK` (docs/system/routing-rules.md,
+        разделы 5 и 6.1). `discountPercent` обязателен при `tariffType = INDIVIDUAL`;
+        если `speedMbps` не передан, берётся скорость из заявки. Ответ — карточка заявки
+        с актуальным маршрутом (`stages`).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialTermsPayload'
+      responses:
+        '200':
+          description: Условия зафиксированы, заявка в `TECH_CHECK`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/contract/sent:
+    post:
+      operationId: markContractSent
+      tags: [Workflow]
+      summary: Отметка «Договор отправлен» (автопауза SLA)
+      description: |
+        Менеджер заявки отмечает отправку договора клиенту. Таймер этапа
+        `CONTRACT_SIGNING` встаёт на автопаузу `AWAIT_CLIENT_SIGNATURE`
+        (docs/system/sla.md, 6.1) и снимается переходом T13. Статус заявки не меняется.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Отметка поставлена, таймер на паузе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/contract/concluded:
+    post:
+      operationId: concludeContract
+      tags: [Workflow]
+      summary: Договор заключён по отметке менеджера (T13)
+      description: |
+        Менеджер заявки вносит номер и дату подписанного договора. Заявка переходит
+        `CONTRACT_SIGNING → IN_EXECUTION`, заполняется `contract_concluded_at`, уровень
+        обязательств становится 1, создаётся первый этап исполнения (`INSTALLATION`),
+        пауза «ожидание подписи» снимается (docs/system/status-model.md, T13).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractConcludedPayload'
+      responses:
+        '200':
+          description: Договор заключён, заявка в `IN_EXECUTION`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/contract/accept-offer:
+    post:
+      operationId: acceptOffer
+      tags: [Workflow]
+      summary: Акцепт оферты клиентом (T13)
+      description: |
+        Представитель компании-клиента акцептует оферту в системе. Заявка переходит
+        `CONTRACT_SIGNING → IN_EXECUTION`, заполняется `contract_concluded_at`, уровень
+        обязательств — 1, создаётся первый этап исполнения (docs/system/status-model.md, T13).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Оферта акцептована, заявка в `IN_EXECUTION`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/act/sent:
+    post:
+      operationId: markActSent
+      tags: [Workflow]
+      summary: Отметка «Акт отправлен» (пауза и срок приёмки)
+      description: |
+        Менеджер заявки в статусе `ACTIVATED` отмечает отправку акта. Таймер этапа
+        `CLOSING` встаёт на автопаузу `AWAIT_CLIENT_SIGNATURE`, запускается срок приёмки:
+        5 рабочих дней в `PROD`, 3 минуты в `DEMO` (docs/system/sla.md, 8), с напоминанием
+        клиенту. Статус заявки не меняется.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Акт отмечен отправленным
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/act/signed:
+    post:
+      operationId: signAct
+      tags: [Workflow]
+      summary: Акт подписан, заявка закрыта (T18)
+      description: |
+        Менеджер заявки фиксирует подписанный акт. Заявка переходит `ACTIVATED → CLOSED`,
+        заполняется `closed_at`, `acceptedByDefault` не меняется, все активные таймеры
+        останавливаются. Требуется отметка «Акт отправлен» и отсутствие открытого этапа
+        `REMEDIATION` (docs/system/status-model.md, T18).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Заявка закрыта
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/close-by-default:
+    post:
+      operationId: closeByDefault
+      tags: [Workflow]
+      summary: Закрытие «Принято по умолчанию» (T18)
+      description: |
+        Менеджер закрывает заявку после истечения срока приёмки без претензии клиента.
+        Заявка переходит `ACTIVATED → CLOSED`, `closed_at` заполняется,
+        `accepted_by_default = true`. До истечения срока приёмки — `409 ILLEGAL_TRANSITION`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Заявка закрыта по умолчанию
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages:
+    get:
+      operationId: listStages
+      tags: [Stages]
+      summary: Очередь этапов роли
+      description: |
+        Этапы с фильтром по роли очереди `queueRole` и статусу `status`. Очередь роли —
+        это `status=QUEUED` (docs/system/status-model.md, 4.2). Исполнитель видит очередь
+        только своей роли, координатор — очереди всех ролей. Этапы `CONTRACT_SIGNING`
+        и `CLOSING` в очередь не попадают. Сортировка по умолчанию — по остатку SLA.
+      parameters:
+        - name: queueRole
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Role'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/StageStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница этапов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StagePage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/my:
+    get:
+      operationId: listMyStages
+      tags: [Stages]
+      summary: «Мои задачи» — этапы текущего исполнителя
+      description: Активные этапы (`QUEUED` и `IN_PROGRESS`), где исполнитель — текущий
+        пользователь, по возрастанию остатка SLA. Фильтров нет.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница этапов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StagePage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/claim:
+    post:
+      operationId: claimStage
+      tags: [Stages]
+      summary: Взять этап в работу
+      description: |
+        Этап переходит `QUEUED → IN_PROGRESS`, `assignee_id` — текущий пользователь,
+        `taken_at` заполняется. Если это первый этап исполнения, наступает T14: пишется
+        `work_started_at`, уровень обязательств — 2 (docs/system/status-model.md, 6.1.2).
+        Этап не в очереди активной роли — `403 STAGE_NOT_IN_YOUR_QUEUE`.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Этап взят в работу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/assign:
+    post:
+      operationId: assignStage
+      tags: [Stages]
+      summary: Назначить или переназначить исполнителя этапа
+      description: |
+        Координатор назначает исполнителя: этап `QUEUED → IN_PROGRESS`, `assignee_id`
+        заполняется, `needs_reassignment` снимается. Для первого этапа исполнения
+        наступает T14. Назначаемый пользователь должен быть активен и иметь роль очереди
+        этапа; иначе `422 VALIDATION_FAILED`.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageAssignPayload'
+      responses:
+        '200':
+          description: Исполнитель назначен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/tech-result:
+    post:
+      operationId: setTechResult
+      tags: [Stages]
+      summary: Результат проверки технической возможности (T05, T07)
+      description: |
+        Технический специалист вносит результат этапа `TECH_CHECK`. `AVAILABLE` — T07:
+        заявка в `CONTRACT_SIGNING`, создаётся одноимённый этап сразу на менеджера заявки.
+        `NONE` — T05: заявка `REJECTED`, причина из справочника `rejection_reason` для шага
+        ТВ, при `reasonCode = OTHER` комментарий обязателен, остальные этапы `CANCELLED`.
+        `WITH_CONSTRUCTION` до недели 3 — `409 ILLEGAL_TRANSITION` (T06 и стройка на неделе 3).
+        Заявка в ответе не возвращается: актуальный статус — `GET /requests/{requestId}`.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechResultPayload'
+      responses:
+        '200':
+          description: Результат зафиксирован, этап завершён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/complete:
+    post:
+      operationId: completeStage
+      tags: [Stages]
+      summary: Этап исполнения выполнен (монтаж, настройка)
+      description: |
+        Инженер отмечает выполнение этапа исполнения: `IN_PROGRESS → DONE`, `finished_at`
+        заполняется. После `INSTALLATION` создаётся `ACTIVATION`, после `CONSTRUCTION` —
+        `INSTALLATION` (docs/system/status-model.md, 6.1.2). Статус заявки не меняется.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Этап завершён, следующий этап создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/activate:
+    post:
+      operationId: activateStage
+      tags: [Stages]
+      summary: Тест пройден, услуга активирована (T16)
+      description: |
+        Инженер завершает этап `ACTIVATION`: заявка переходит `IN_EXECUTION → ACTIVATED`,
+        заполняется `activated_at`, уровень обязательств — 3, создаётся этап `CLOSING`
+        для менеджера заявки. Требование: монтаж выполнен (`INSTALLATION` в `DONE`).
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Услуга активирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/sla:
+    get:
+      operationId: getRequestSla
+      tags: [Sla]
+      summary: Таймеры SLA и контрольные сроки заявки
+      description: |
+        Норматив, остаток, время по SLA и календарное, журнал пауз по каждому этапу и по
+        контрольным срокам заявки (docs/system/sla.md, 8 и 10). Доступно менеджеру,
+        исполнителям этапов, руководителю B2B и координатору; клиенту SLA не показывается — `403`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Таймеры и журнал пауз
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlaView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/sla/pause:
+    post:
+      operationId: pauseStageSla
+      tags: [Sla]
+      summary: Ручная пауза SLA этапа
+      description: |
+        Координатор ставит паузу с причиной из справочника `pause_reason` и обязательным
+        комментарием (docs/system/sla.md, 6.2). Допустимы только ручные причины:
+        `AWAIT_CLIENT_DATA`, `NO_ACCESS`, `CLIENT_RESCHEDULED`; автоматическая или неизвестная
+        причина — `422 PAUSE_REASON_INVALID`. Запись паузы попадает в журнал.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlaPausePayload'
+      responses:
+        '200':
+          description: Пауза поставлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/sla/resume:
+    post:
+      operationId: resumeStageSla
+      tags: [Sla]
+      summary: Снять ручную паузу SLA этапа
+      description: |
+        Координатор снимает паузу; отсчёт SLA продолжается, `due_at` пересчитывается
+        по оставшемуся рабочему времени. Автоматические паузы снимаются только переходами.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Пауза снята
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/sla/extend-pause:
+    post:
+      operationId: extendStageSlaPause
+      tags: [Sla]
+      summary: Продлить паузу SLA этапа
+      description: |
+        Координатор продлевает паузу при достижении предела 10 рабочих дней (DEMO — 4 минуты):
+        `extended_count` растёт, предел сдвигается, комментарий обязателен
+        (docs/system/sla.md, 6.2, п. 4).
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlaExtendPausePayload'
+      responses:
+        '200':
+          description: Пауза продлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [Notifications]
+      summary: Уведомления текущего пользователя
+      description: |
+        Только свои уведомления, новые сверху. Источник истины для интерфейса
+        (docs/system/notifications.md, 7): WebSocket служит лишь сигналом.
+      parameters:
+        - name: unread
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Только непрочитанные
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница уведомлений
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/notifications/{notificationId}/read:
+    post:
+      operationId: readNotification
+      tags: [Notifications]
+      summary: Отметить уведомление прочитанным
+      description: |
+        Без тела. Повторное прочтение не ошибка: `read_at` не меняется.
+        Чужое уведомление — `404`.
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '204':
+          description: Уведомление прочитано
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/notifications/read-all:
+    post:
+      operationId: readAllNotifications
+      tags: [Notifications]
+      summary: Отметить все уведомления прочитанными
+      description: Без тела. Уже прочитанные не меняются.
+      responses:
+        '204':
+          description: Все уведомления прочитаны
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/events/stream:
+    get:
+      operationId: streamEvents
+      tags: [Events]
+      summary: Канал событий ядро → шлюз (Server-Sent Events)
+      description: |
+        Постоянное соединение, которое шлюз открывает при старте (docs/system/api-contract.md, 4.5).
+        Каждое событие — строка `data: <JSON EventSignal>`; в сигнале только идентификатор
+        события и адресат `userId`, данные клиент забирает по REST. После коммита транзакции
+        перехода ядро отправляет сигнал и ставит `notification.published_at`. При подключении
+        сначала уходят записи с пустым `published_at` и записи после `Last-Event-ID`, затем новые.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: Момент `created_at` последнего полученного события.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Поток `text/event-stream`; в каждой строке `data:` — JSON `EventSignal`
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/EventSignal'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/ws/ticket:
+    get:
+      operationId: issueWsTicket
+      tags: [Events]
+      summary: Одноразовый билет для WebSocket
+      description: |
+        Билет выдаётся аутентифицированному пользователю, живёт 30 секунд, привязан к
+        пользователю и активной роли. Шлюз передаёт билет клиенту как есть, а при установке
+        соединения проверяет его через `POST /internal/v1/ws/ticket/redeem`
+        (docs/system/api-contract.md, 4.4).
+      responses:
+        '200':
+          description: Билет выдан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WsTicketView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/ws/ticket/redeem:
+    post:
+      operationId: redeemWsTicket
+      tags: [Events]
+      summary: Проверить билет WebSocket при установке соединения
+      description: |
+        Шлюз передаёт билет ядру перед установкой соединения. Билет одноразовый: повторная
+        проверка, истёкший или неизвестный билет — `401 UNAUTHORIZED`. Ответ содержит
+        пользователя и активную роль, к которой привязан билет; по ним шлюз регистрирует
+        соединение и адресует сигналы (docs/system/api-contract.md, 4.4).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WsTicketRedeemPayload'
+      responses:
+        '200':
+          description: Билет действителен и помечен использованным
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WsTicketRedeemView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/users:
+    get:
+      operationId: listOperatorUsers
+      tags: [Users]
+      summary: Сотрудники оператора с ролью
+      description: |
+        Список для выбора исполнителя: координатор назначает менеджера заявки
+        (`POST /requests/{requestId}/assign-manager`) и исполнителя этапа
+        (`POST /stages/{stageId}/assign`). Возвращаются активные сотрудники оператора
+        с ролью `role`; признак `active` нужен интерфейсу, чтобы показать состояние
+        учётной записи, но для назначения неактивный пользователь не подходит
+        (docs/system/api-contract.md, 6.1). Доступно только координатору (`COORDINATOR`);
+        другим ролям — `403 ACCESS_DENIED`.
+      parameters:
+        - name: role
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница сотрудников
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorUserPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     internalToken:
@@ -552,6 +1381,20 @@ components:
   parameters:
     RequestId:
       name: requestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StageId:
+      name: stageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NotificationId:
+      name: notificationId
       in: path
       required: true
       schema:
@@ -786,9 +1629,13 @@ components:
         kpp:
           type: string
           maxLength: 9
+          pattern: '^\d{9}$'
+          description: 9 цифр (docs/system/api-contract.md, 10.4)
         ogrn:
           type: string
           maxLength: 15
+          pattern: '^(\d{13}|\d{15})$'
+          description: 13 цифр для организации, 15 — для ИП
         legalAddress:
           type: string
           maxLength: 500
@@ -1001,6 +1848,54 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ServiceOfferView'
+        requestClass:
+          $ref: '#/components/schemas/RequestClass'
+        techResult:
+          $ref: '#/components/schemas/TechResult'
+        techRejectReasonCode:
+          type: string
+          description: Код из `rejection_reason`; заполнен при `techResult = NONE`
+        techRejectReason:
+          type: string
+          description: Комментарий технического специалиста при `techResult = NONE`
+        capex:
+          type: string
+          example: '300000.00'
+          description: Затраты оператора при `techResult = WITH_CONSTRUCTION`
+        constructionDays:
+          type: integer
+          description: Срок стройки в календарных днях при `techResult = WITH_CONSTRUCTION`
+        contractNumber:
+          type: string
+        contractSentAt:
+          type: string
+          format: date-time
+        contractConcludedAt:
+          type: string
+          format: date-time
+          description: Событие уровня обязательств 1 (T13)
+        workStartedAt:
+          type: string
+          format: date-time
+          description: Событие уровня обязательств 2 (T14)
+        activatedAt:
+          type: string
+          format: date-time
+          description: Событие уровня обязательств 3 (T16); после него отмена запрещена
+        actSentAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+        acceptedByDefault:
+          type: boolean
+          description: Заявка закрыта по истечении срока приёмки (T18)
+        stages:
+          type: array
+          description: Маршрут текущей версии в порядке этапов; клиенту исполнители не отдаются
+          items:
+            $ref: '#/components/schemas/StageView'
         warnings:
           type: array
           items:
@@ -1108,3 +2003,498 @@ components:
         - ENGINEER
         - COORDINATOR
         - ADMIN
+    StageType:
+      type: string
+      description: Типы этапов маршрута (docs/system/status-model.md, 4.1).
+      enum:
+        - TECH_CHECK
+        - RECHECK_TECH
+        - LEGAL_APPROVAL
+        - FINANCE_APPROVAL
+        - PROCUREMENT_APPROVAL
+        - MGMT_APPROVAL
+        - CONTRACT_SIGNING
+        - CONSTRUCTION
+        - INSTALLATION
+        - ACTIVATION
+        - REMEDIATION
+        - CLOSING
+    StageStatus:
+      type: string
+      enum: [QUEUED, IN_PROGRESS, DONE, RETURNED, REJECTED, SUPERSEDED, CANCELLED]
+    TechResult:
+      type: string
+      description: Результат проверки технической возможности.
+      enum: [AVAILABLE, WITH_CONSTRUCTION, NONE]
+    RequestClass:
+      type: string
+      description: |
+        Производный класс заявки (docs/system/routing-rules.md, 8): `STANDARD` — согласований
+        нет, `EXTENDED` — только юридическое и/или финансовое, `LARGE` — закупочное или
+        управленческое.
+      enum: [STANDARD, EXTENDED, LARGE]
+    StageView:
+      type: object
+      required: [id, requestId, type, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        requestNumber:
+          type: string
+          example: REQ-2026-000123
+        type:
+          $ref: '#/components/schemas/StageType'
+        status:
+          $ref: '#/components/schemas/StageStatus'
+        queueRole:
+          $ref: '#/components/schemas/Role'
+        assigneeId:
+          type: string
+          format: uuid
+          description: Не отдаётся клиенту
+        needsReassignment:
+          type: boolean
+          description: Исполнитель деактивирован, этап ждёт переназначения
+        requiredByRules:
+          type: array
+          description: ID сработавших правил маршрутизации, из-за которых создан этап
+          items:
+            type: string
+            example: R-01
+        routeVersion:
+          type: integer
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        takenAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+    StagePage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    CommercialTermsPayload:
+      type: object
+      description: |
+        Тело T04 (docs/system/api-contract.md, 6.13 и 10.7). Скидка обязательна при
+        `tariffType = INDIVIDUAL`; это проверяет ядро.
+      required: [tariffType, contractType, version]
+      properties:
+        tariffType:
+          $ref: '#/components/schemas/TariffType'
+        discountPercent:
+          type: string
+          description: |
+            Проценты строкой с двумя знаками, от `"0.00"` до `"100.00"`. Значение больше
+            `"100.00"` — `INVALID` по правилу формата (docs/system/api-contract.md, 10.7);
+            границу проверяет ядро, шаблон проверяет только форму записи.
+          pattern: '^[0-9]{1,3}\.[0-9]{2}$'
+          example: '15.00'
+        contractType:
+          $ref: '#/components/schemas/ContractType'
+        speedMbps:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: Если не передан, берётся `requestedSpeedMbps` заявки
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    StageAssignPayload:
+      type: object
+      required: [assigneeId, version]
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    TechResultPayload:
+      type: object
+      description: |
+        Тело результата ТВ (docs/system/api-contract.md, 6.13 и 10.8). Обязательность полей
+        зависит от `result`: `capex` и `constructionDays` — при `WITH_CONSTRUCTION`,
+        `reasonCode` — при `NONE`, `comment` — при `reasonCode = OTHER`.
+      required: [result, version]
+      properties:
+        result:
+          $ref: '#/components/schemas/TechResult'
+        capex:
+          type: string
+          description: Деньги строкой с двумя знаками, больше нуля
+          pattern: '^[0-9]+\.[0-9]{2}$'
+          example: '300000.00'
+        constructionDays:
+          type: integer
+          minimum: 1
+          description: Календарные дни стройки
+        reasonCode:
+          type: string
+          description: |
+            Код из справочника `rejection_reason` для шага ТВ. На неделе 2 в справочнике
+            есть только `OTHER` (списки причин по шагам готовит бизнес-аналитик), поэтому
+            интерфейс фиксирует этот код у себя, а комментарий при `OTHER` обязателен.
+            Общий справочник `GET /dictionaries/{name}` (docs/system/api-contract.md, 6.11)
+            появится вместе со списками причин отдельным изменением контракта на неделе 3.
+        comment:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ContractConcludedPayload:
+      type: object
+      required: [contractNumber, concludedAt, version]
+      properties:
+        contractNumber:
+          type: string
+          maxLength: 100
+        concludedAt:
+          type: string
+          format: date
+          description: Дата подписания, не позже сегодняшней
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    SlaTimerKind:
+      type: string
+      description: |
+        Вид таймера. Те же значения используются в `payload.deadlineKind` событий
+        `CONTROL_DEADLINE_*` (docs/system/api-contract.md, раздел 7), чтобы интерфейсу
+        не приходилось сопоставлять два набора имён.
+      enum:
+        - STAGE_SLA
+        - DATA_CHECK
+        - MANAGER_ASSIGNMENT
+        - TECH_RESULT
+        - ACCEPTANCE
+        - CANCEL_RESPONSE
+    SlaTimerStatus:
+      type: string
+      enum: [RUNNING, PAUSED, STOPPED]
+    PauseReason:
+      type: string
+      description: |
+        Закрытый справочник причин паузы (docs/system/sla.md, 6.1). Вручную координатор
+        ставит только `AWAIT_CLIENT_DATA`, `NO_ACCESS` и `CLIENT_RESCHEDULED`.
+      enum:
+        - REWORK
+        - AWAIT_CLIENT_SIGNATURE
+        - AWAIT_CLIENT_DATA
+        - NO_ACCESS
+        - CLIENT_RESCHEDULED
+        - CANCEL_REVIEW
+        - RECHECK_TECH
+    SlaPauseView:
+      type: object
+      required: [id, reasonCode, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reasonCode:
+          $ref: '#/components/schemas/PauseReason'
+        comment:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        limitAt:
+          type: string
+          format: date-time
+          description: Предельный срок паузы
+        extendedCount:
+          type: integer
+        setBy:
+          type: string
+          format: uuid
+          description: Пусто для системной паузы
+    SlaTimerView:
+      type: object
+      required: [id, kind, status, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/SlaTimerKind'
+        stageId:
+          type: string
+          format: uuid
+          description: Только для `kind = STAGE_SLA`
+        stageType:
+          $ref: '#/components/schemas/StageType'
+        status:
+          $ref: '#/components/schemas/SlaTimerStatus'
+        normMinutes:
+          type: integer
+          description: Норматив из `sla_norm` в минутах с признаком календаря
+        startedAt:
+          type: string
+          format: date-time
+        warnAt:
+          type: string
+          format: date-time
+          description: Момент предупреждения (25 % остатка)
+        dueAt:
+          type: string
+          format: date-time
+          description: Момент нарушения при условии, что пауз больше не будет
+        escalateAt:
+          type: string
+          format: date-time
+          description: Второй уровень эскалации
+        elapsedSlaSeconds:
+          type: integer
+          format: int64
+          description: Израсходованное рабочее время без пауз
+        remainingSlaSeconds:
+          type: integer
+          format: int64
+        calendarElapsedSeconds:
+          type: integer
+          format: int64
+          description: Календарное время с создания таймера, без вычета пауз
+        warnedAt:
+          type: string
+          format: date-time
+        breachedAt:
+          type: string
+          format: date-time
+        escalationLevel:
+          type: integer
+        overdue:
+          type: boolean
+        pause:
+          $ref: '#/components/schemas/SlaPauseView'
+    SlaView:
+      type: object
+      required: [requestId, timers, pauses]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        timers:
+          type: array
+          description: Таймеры этапов и контрольные сроки заявки
+          items:
+            $ref: '#/components/schemas/SlaTimerView'
+        pauses:
+          type: array
+          description: Журнал пауз заявки, новые сверху
+          items:
+            $ref: '#/components/schemas/SlaPauseView'
+    SlaPausePayload:
+      type: object
+      required: [reasonCode, comment, version]
+      properties:
+        reasonCode:
+          type: string
+          description: |
+            Код из справочника `pause_reason`. Вручную координатор ставит только
+            `AWAIT_CLIENT_DATA`, `NO_ACCESS` или `CLIENT_RESCHEDULED`; неизвестная или
+            автоматическая причина — `422 PAUSE_REASON_INVALID` (docs/system/api-contract.md,
+            10.10). Проверку выполняет ядро, поэтому перечисление в схеме не задаётся.
+        comment:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    SlaExtendPausePayload:
+      type: object
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    NotificationEventType:
+      type: string
+      description: Коды событий для `notification.event_type` и WebSocket (docs/system/api-contract.md, 7).
+      enum:
+        - REQUEST_SUBMITTED
+        - REQUEST_ASSIGNED
+        - STAGE_QUEUED
+        - STAGE_ASSIGNED
+        - STAGE_REASSIGN_REQUIRED
+        - STATUS_CHANGED
+        - APPROVAL_RETURNED
+        - TECH_RETURNED
+        - CONTRACT_CHANGE_REQUESTED
+        - TECH_RECHECK_REQUIRED
+        - APPROVAL_REJECTED
+        - TECH_RESULT_NONE
+        - CONTRACT_READY
+        - SERVICE_ACTIVATED
+        - DEFECT_CLAIMED
+        - ACT_SENT
+        - ACCEPTANCE_REMINDER
+        - REQUEST_CLOSED
+        - CANCEL_REQUESTED
+        - CANCEL_TERMS_READY
+        - CANCEL_RESOLVED
+        - SLA_WARNING
+        - SLA_BREACH
+        - SLA_ESCALATION
+        - PAUSE_LIMIT_WARNING
+        - PAUSE_LIMIT_REACHED
+        - CONTROL_DEADLINE_WARNING
+        - CONTROL_DEADLINE_BREACH
+        - INTEGRATION_ERROR
+        - COMPANY_CONFIRMED
+        - COMPANY_REJECTED
+        - EXPORT_READY
+    NotificationView:
+      type: object
+      required: [id, eventType, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          $ref: '#/components/schemas/NotificationEventType'
+        requestId:
+          type: string
+          format: uuid
+        payload:
+          type: object
+          description: |
+            Данные для подписи без запроса к серверу: `stageId`, `stageType`, `minutesLeft`,
+            `deadlineKind`, `companyId`, `exportId` (docs/system/notifications.md, 5).
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+          description: Момент записи сигнала в канал событий
+    NotificationPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    WsTicketView:
+      type: object
+      required: [ticket, expiresIn]
+      properties:
+        ticket:
+          type: string
+          example: wst_1f2e3d4c
+          description: Одноразовый билет; сам билет в БД не хранится
+        expiresIn:
+          type: integer
+          example: 30
+    WsTicketRedeemPayload:
+      type: object
+      required: [ticket]
+      properties:
+        ticket:
+          type: string
+          example: wst_1f2e3d4c
+    WsTicketRedeemView:
+      type: object
+      required: [userId, activeRole]
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Пользователь, к которому привязан билет
+        activeRole:
+          $ref: '#/components/schemas/Role'
+    OperatorUserView:
+      type: object
+      required: [id, login, fullName, operatorRoles, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        login:
+          type: string
+          example: a.smirnova
+        fullName:
+          type: string
+          example: Анна Смирнова
+        operatorRoles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        active:
+          type: boolean
+          description: Учётная запись действует; для назначения неактивный пользователь недопустим
+    OperatorUserPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperatorUserView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    EventSignal:
+      type: object
+      description: |
+        Сигнал в канале событий ядро → шлюз (docs/system/api-contract.md, 4.5).
+        Несёт только идентификатор события, адресата и короткий `payload`: данные интерфейс
+        забирает по REST. `userId` нужен шлюзу для выбора WebSocket-соединений; в браузер
+        шлюз отправляет конверт без `userId`: `id`, `type`, `requestId`, `createdAt`,
+        `payload` (docs/system/api-contract.md, 4.4).
+      required: [id, type, userId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор уведомления (`notification.id`)
+        type:
+          $ref: '#/components/schemas/NotificationEventType'
+        requestId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          description: Получатель сигнала (`notification.recipient_user_id`); шлюз рассылает сигнал по соединениям этого пользователя
+        createdAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true

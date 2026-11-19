@@ -150,7 +150,7 @@
 | № | Файл | Расхождение | Решение (код / документ) | Статус |
 |---|---|---|---|---|
 | 1 | `RequestWorkflowService` (отправка заявки) | `desiredDate` проверяется только на заполненность; по [ui-requirements.md](business/ui-requirements.md), 6.7, и [api-contract.md](system/api-contract.md), 10.6, дата не раньше сегодняшней | Код: проверка в ядре | Открыто |
-| 2 | `CompanyService.register`, `core-api.yaml` (`RegisterCompanyRequest`) | `kpp` и `ogrn` ограничены только длиной строки; по [api-contract.md](system/api-contract.md), 10.4, КПП — 9 цифр, ОГРН — 13 или 15 цифр | Код: шаблон в контракте и проверка в ядре | Открыто |
+| 2 | `CompanyService.register`, `core-api.yaml` (`RegisterCompanyRequest`) | `kpp` и `ogrn` ограничены только длиной строки; по [api-contract.md](system/api-contract.md), 10.4, КПП — 9 цифр, ОГРН — 13 или 15 цифр | Код: шаблон в контракте и проверка в ядре | Частично: шаблоны в контракте (PR #42), проверка в ядре — открыто |
 | 3 | `RequestWorkflowService` (отправка заявки) | Телефон проверяется по числу символов (10–20 вместе со скобками и пробелами), пустой даёт `INVALID`; по [api-contract.md](system/api-contract.md), 10.6, — не менее 10 цифр, пустой при отправке — `REQUIRED` | Код: проверка в ядре | Открыто |
 
 ## 9. Контрольная точка (на неделе 16–22.11)
