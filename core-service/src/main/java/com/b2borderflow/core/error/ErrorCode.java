@@ -17,6 +17,8 @@ public enum ErrorCode {
     EXTERNAL_SYSTEM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Внешняя система недоступна", true),
     ILLEGAL_TRANSITION(HttpStatus.CONFLICT, "Переход недопустим из текущего статуса", false),
     VERSION_CONFLICT(HttpStatus.CONFLICT, "Версия объекта устарела", false),
+    STAGE_NOT_IN_YOUR_QUEUE(HttpStatus.FORBIDDEN, "Этап не в очереди активной роли", false),
+    STAGE_ALREADY_DECIDED(HttpStatus.CONFLICT, "Этап уже закрыт или решение принято", false),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Ключ идемпотентности использован с другим телом", false),
     NOT_FOUND(HttpStatus.NOT_FOUND, "Объект не найден", false),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "Действие не разрешено", false),

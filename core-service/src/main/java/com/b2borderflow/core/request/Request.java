@@ -107,6 +107,9 @@ public class Request extends AuditableEntity {
     @Column(name = "tech_result")
     private String techResult;
 
+    @Column(name = "tech_reject_reason_code")
+    private String techRejectReasonCode;
+
     @Column(name = "tech_reject_reason")
     private String techRejectReason;
 
@@ -355,6 +358,14 @@ public class Request extends AuditableEntity {
 
     public void setTechResult(String techResult) {
         this.techResult = techResult;
+    }
+
+    public String getTechRejectReasonCode() {
+        return techRejectReasonCode;
+    }
+
+    public void setTechRejectReasonCode(String techRejectReasonCode) {
+        this.techRejectReasonCode = techRejectReasonCode;
     }
 
     public String getTechRejectReason() {
