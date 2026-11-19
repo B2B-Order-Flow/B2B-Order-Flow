@@ -17,6 +17,11 @@ public interface SlaTimerRepository extends JpaRepository<SlaTimer, UUID> {
     Optional<SlaTimer> findFirstByRequestIdAndKindAndStatusIn(
             UUID requestId, SlaTimerKind kind, Collection<SlaTimerStatus> statuses);
 
+    Optional<SlaTimer> findFirstByRequestIdAndKindOrderByCreatedAtDesc(
+            UUID requestId, SlaTimerKind kind);
+
+    List<SlaTimer> findByRequestIdAndStatusIn(UUID requestId, Collection<SlaTimerStatus> statuses);
+
     /** Кандидаты планировщика; блокировка {@code FOR UPDATE SKIP LOCKED} — на неделе 5. */
     List<SlaTimer> findByStatusInAndNextEventAtLessThanEqualOrderByNextEventAtAsc(
             Collection<SlaTimerStatus> statuses, OffsetDateTime moment, Pageable pageable);
