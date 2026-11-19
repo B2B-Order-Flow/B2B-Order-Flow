@@ -1,7 +1,15 @@
 // Все тексты интерфейса — в этом файле (nfr.md §10, ui-requirements.md §2 п. 8).
 // Подписи кодов API — по ui-requirements.md §5, тексты ошибок — по §10.
 
-import type { CompanyStatus, ContractType, RequestStatus, Role, StageType, TariffType } from '../api/types';
+import type {
+  CompanyStatus,
+  ContractType,
+  PauseReason,
+  RequestStatus,
+  Role,
+  StageType,
+  TariffType,
+} from '../api/types';
 
 export const texts = {
   app: {
@@ -290,9 +298,10 @@ export const texts = {
     crmManagerSet: 'указан в CRM',
     crmManagerNone: 'нет',
     stageSla: 'Срок этапа',
-    slaUnknown: 'Срок этапа появится, когда ядро вернёт таймер',
-    slaTimes: (sla: string, calendar: string, pauses: number) =>
-      `Время по SLA: ${sla}. Календарное: ${calendar}. ${pauses === 0 ? 'Пауз не было.' : `Пауз: ${pauses}.`}`,
+    slaUnknown: 'Таймера этого этапа нет в ответе ядра',
+    slaTime: (time: string) => `Время по SLA: ${time}.`,
+    calendarTime: (time: string) => `Календарное: ${time}.`,
+    pausedNow: (reason: string) => `Сейчас пауза: ${reason}.`,
     addressParams: 'Адрес и параметры',
   },
 
@@ -331,15 +340,13 @@ export const texts = {
     reasons: { OTHER: 'Другая причина' } as Record<string, string>,
     comment: 'Комментарий',
     submit: 'Сохранить результат',
-    returnToManager: 'Вернуть менеджеру',
     saved: 'Результат проверки сохранён',
     noneConfirmTitle: 'Подключение невозможно?',
     noneConfirmText: 'Заявка будет отклонена, клиент и менеджер получат уведомление.',
     noneConfirm: 'Отклонить заявку',
-    returnTitle: 'Вернуть заявку менеджеру',
-    returnComment: 'Что нужно уточнить',
-    returnFailed: 'Не удалось вернуть заявку. Обновите страницу и повторите',
-    returned: 'Заявка возвращена менеджеру',
+    constructionUnavailableTitle: 'Результат «Есть со стройкой» пока не принимается',
+    constructionUnavailable:
+      'Стройку и связанные с ней согласования система начнёт поддерживать на следующем этапе разработки. Пока выберите «Есть» или «Нет», а случай со стройкой обсудите с менеджером заявки.',
   },
 
   queue: {
@@ -352,9 +359,11 @@ export const texts = {
       PROCUREMENT_SPECIALIST: 'закупочное согласование',
       B2B_HEAD: 'управленческое согласование',
     } as Partial<Record<Role, string>>,
-    intro: 'Этапы сортированы по оставшемуся времени. Возьмите этап — он появится в «Моих задачах».',
+    intro: 'Сверху — этапы, которые ждут дольше. Возьмите этап — он появится в «Моих задачах».',
     role: 'Очередь роли',
-    columns: { request: 'Заявка', company: 'Компания и адрес', queued: 'В очереди с', sla: 'Срок этапа' },
+    columns: { request: 'Заявка', stage: 'Этап', queued: 'В очереди с', sla: 'Срок этапа' },
+    byRules: (rules: string) => `по правилам ${rules}`,
+    slaLater: 'Срок этапа — в карточке заявки',
     claim: 'Взять',
     assign: 'Назначить',
     claimed: 'Этап взят в работу',
@@ -370,8 +379,9 @@ export const texts = {
   myTasks: {
     title: 'Мои задачи',
     intro: 'Этапы, которые вы взяли. Откройте заявку, чтобы внести результат.',
-    columns: { request: 'Заявка', company: 'Компания и адрес', stage: 'Этап', sla: 'Срок этапа' },
-    stageTaken: (stage: string, takenAt: string) => `${stage}, взят ${takenAt}`,
+    columns: { request: 'Заявка', stage: 'Этап', sla: 'Срок этапа' },
+    taken: (takenAt: string) => `взят ${takenAt}`,
+    assignedNotTaken: 'назначен вам координатором',
     open: 'Открыть',
     empty: 'Задач нет. Возьмите этап из очереди',
     toQueue: 'Открыть очередь',
@@ -392,6 +402,16 @@ export const texts = {
     alreadyTaken: 'Заявку уже взял другой менеджер',
     empty: 'Нет заявок, ожидающих менеджера',
   },
+
+  pauseReason: {
+    REWORK: 'доработка заявки',
+    AWAIT_CLIENT_SIGNATURE: 'ждём подпись клиента',
+    AWAIT_CLIENT_DATA: 'ждём данные от клиента',
+    NO_ACCESS: 'нет доступа на объект',
+    CLIENT_RESCHEDULED: 'клиент перенёс дату',
+    CANCEL_REVIEW: 'рассматривается отмена',
+    RECHECK_TECH: 'повторная проверка ТВ',
+  } satisfies Record<PauseReason, string>,
 
   stageType: {
     TECH_CHECK: 'Проверка ТВ',

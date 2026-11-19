@@ -141,7 +141,7 @@ export function AssignManagerDialog({ request, onClose }: { request: RequestView
               disabled={users.isPending}
               placeholder={users.isPending ? texts.common.loading : t.chooseManager}
               options={(users.data?.content ?? [])
-                .filter((u) => u.id !== request.managerId)
+                .filter((u) => u.active && u.id !== request.managerId)
                 .map((u) => ({ value: u.id, label: `${u.fullName} (${u.login})` }))}
               testId="assign-manager-select"
             />

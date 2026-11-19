@@ -2,6 +2,7 @@ import { api, newIdempotencyKey } from './client';
 import type {
   AuditEntry,
   CommercialTermsPayload,
+  OperatorUserView,
   CompanyDecisionRequest,
   CompanyStatus,
   CompanyView,
@@ -14,11 +15,11 @@ import type {
   RequestListQuery,
   RequestPayload,
   RequestView,
+  SlaView,
   Role,
   StageQueueQuery,
   StageView,
   TechResultPayload,
-  UserBrief,
   UserView,
 } from './types';
 
@@ -66,6 +67,8 @@ export const requestsApi = {
     api.post<RequestView>(`/requests/${requestId}/commercial-terms`, { body }),
   acceptOffer: (requestId: string, version: number) =>
     api.post<RequestView>(`/requests/${requestId}/contract/accept-offer`, { body: { version } }),
+  /** Таймеры этапов и контрольные сроки (оператору; клиенту SLA не отдаётся). */
+  sla: (requestId: string) => api.get<SlaView>(`/requests/${requestId}/sla`),
 };
 
 // Этапы — неделя 2 (api-contract.md §6.4, 6.13).
@@ -77,13 +80,11 @@ export const stagesApi = {
     api.post<StageView>(`/stages/${stageId}/assign`, { body: { assigneeId, version } }),
   techResult: (stageId: string, body: TechResultPayload) =>
     api.post<StageView>(`/stages/${stageId}/tech-result`, { body }),
-  returnToManager: (stageId: string, comment: string, version: number) =>
-    api.post<StageView>(`/stages/${stageId}/return`, { body: { comment, version } }),
 };
 
 // Сотрудники оператора с ролью — для назначения менеджера и исполнителя (api-contract.md §6.1).
 export const usersApi = {
-  byRole: (role: Role) => api.get<Page<UserBrief>>('/users', { query: { role, size: 100 } }),
+  byRole: (role: Role) => api.get<Page<OperatorUserView>>('/users', { query: { role, size: 100 } }),
 };
 
 // Ключи кэша TanStack Query: одно место, чтобы инвалидировать согласованно.
@@ -98,5 +99,6 @@ export const queryKeys = {
   stagesQueue: (query: object) => ['stages', 'queue', query] as const,
   stagesMy: ['stages', 'my'] as const,
   stagesAll: ['stages'] as const,
+  sla: (requestId: string) => ['request', requestId, 'sla'] as const,
   usersByRole: (role: string) => ['users', role] as const,
 };

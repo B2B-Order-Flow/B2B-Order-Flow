@@ -1,34 +1,19 @@
 import Typography from '@mui/material/Typography';
 import type { StageView } from '../../api/types';
-import { SlaIndicator } from '../../components/ui/SlaIndicator';
-import { slaSnapshot } from '../../lib/sla';
 import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
 
-/** Ячейка «Срок этапа» в очередях: норматив, остаток и шкала. */
-export function StageSlaCell({ stage }: { stage: StageView }) {
-  if (!stage.sla) {
-    return (
-      <Typography variant="caption" sx={{ color: c('text-muted') }}>
-        {texts.requestCard.slaUnknown}
-      </Typography>
-    );
-  }
-  const snapshot = slaSnapshot(stage.sla);
+/**
+ * Ячейка «Срок этапа» в очередях. Сводки SLA в StageView пока нет: отдаст ли её ядро, решат
+ * Дима и Кирилл до 24.11. До тех пор показываем «—», а срок этапа — в карточке заявки.
+ */
+export function StageSlaCell() {
   return (
-    <SlaIndicator
-      label={snapshot.normLabel}
-      value={snapshot.valueLabel}
-      state={snapshot.state}
-      share={snapshot.share}
-    />
+    <Typography variant="body1" component="span" sx={{ color: c('text-muted') }} title={texts.queue.slaLater}>
+      —
+    </Typography>
   );
 }
 
-/** Остаток SLA в минутах для сортировки очереди: меньше — выше (sla.md §10). Без таймера — в конец. */
-export function remainingMinutes(stage: StageView): number {
-  if (!stage.sla) return Number.POSITIVE_INFINITY;
-  return stage.sla.normMinutes - stage.sla.elapsedSlaSeconds / 60;
-}
-
-export const byRemainingSla = (a: StageView, b: StageView) => remainingMinutes(a) - remainingMinutes(b);
+/** Без сводки SLA очередь сортируется по времени постановки: дольше ждущие этапы — выше. */
+export const byQueuedAt = (a: StageView, b: StageView) => Date.parse(a.createdAt) - Date.parse(b.createdAt);

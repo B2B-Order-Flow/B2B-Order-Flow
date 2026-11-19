@@ -21,9 +21,14 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/states';
 import { formatShortDateTime } from '../../lib/format';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
-import { byRemainingSla, StageSlaCell } from './StageSlaCell';
+import { byQueuedAt, StageSlaCell } from './StageSlaCell';
 
 const t = texts.queue;
+
+/** «по правилам R-01, R-03» — почему этап появился в маршруте (StageView.requiredByRules). */
+function rulesLabel(stage: StageView): string | undefined {
+  return stage.requiredByRules?.length ? texts.queue.byRules(stage.requiredByRules.join(', ')) : undefined;
+}
 
 /** Роли с очередью этапов (status-model.md §4.1; этапы менеджера в очередь не попадают). */
 export const QUEUE_ROLES: Role[] = [
@@ -69,7 +74,7 @@ export function QueuePage() {
     },
   });
 
-  const rows = [...(query.data?.content ?? [])].sort(byRemainingSla);
+  const rows = [...(query.data?.content ?? [])].sort(byQueuedAt);
 
   const columns: Column<StageView>[] = [
     {
@@ -79,11 +84,11 @@ export function QueuePage() {
       render: (s) => <Cell strong>{s.requestNumber ?? '—'}</Cell>,
     },
     {
-      key: 'company',
-      title: t.columns.company,
+      key: 'stage',
+      title: t.columns.stage,
       render: (s) => (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <TwoLineCell title={s.companyName ?? '—'} subtitle={s.address} />
+          <TwoLineCell title={texts.stageType[s.type]} subtitle={rulesLabel(s)} />
           {coordinator && s.needsReassignment ? <Chip tone="orange" label={t.needsReassignment} /> : null}
         </Box>
       ),
@@ -94,7 +99,7 @@ export function QueuePage() {
       width: 130,
       render: (s) => <Cell>{formatShortDateTime(s.createdAt)}</Cell>,
     },
-    { key: 'sla', title: t.columns.sla, width: 300, render: (s) => <StageSlaCell stage={s} /> },
+    { key: 'sla', title: t.columns.sla, width: 300, render: () => <StageSlaCell /> },
     {
       key: 'action',
       title: '',
@@ -151,19 +156,25 @@ export function QueuePage() {
           testId="queue-table"
         />
       )}
-      {assigning ? <AssignStageDialog stage={assigning} onClose={() => setAssigning(null)} /> : null}
+      {assigning ? (
+        <AssignStageDialog
+          stage={assigning}
+          role={assigning.queueRole ?? queueRole}
+          onClose={() => setAssigning(null)}
+        />
+      ) : null}
     </Page>
   );
 }
 
 /** «Назначить» (координатор): сотрудник с ролью очереди этапа (GET /users?role=…, открытый вопрос 3). */
-function AssignStageDialog({ stage, onClose }: { stage: StageView; onClose: () => void }) {
+function AssignStageDialog({ stage, role, onClose }: { stage: StageView; role: Role; onClose: () => void }) {
   const queryClient = useQueryClient();
   const notify = useNotify();
   const [assigneeId, setAssigneeId] = useState('');
   const users = useQuery({
-    queryKey: queryKeys.usersByRole(stage.queueRole),
-    queryFn: () => usersApi.byRole(stage.queueRole),
+    queryKey: queryKeys.usersByRole(role),
+    queryFn: () => usersApi.byRole(role),
   });
   const assign = useMutation({
     mutationFn: () => stagesApi.assign(stage.id, assigneeId, stage.version),
@@ -188,7 +199,9 @@ function AssignStageDialog({ stage, onClose }: { stage: StageView; onClose: () =
               onChange={setAssigneeId}
               disabled={users.isPending}
               placeholder={users.isPending ? texts.common.loading : t.chooseAssignee}
-              options={(users.data?.content ?? []).map((u) => ({ value: u.id, label: `${u.fullName} (${u.login})` }))}
+              options={(users.data?.content ?? [])
+                .filter((u) => u.active)
+                .map((u) => ({ value: u.id, label: `${u.fullName} (${u.login})` }))}
               testId="stage-assignee"
             />
           )}

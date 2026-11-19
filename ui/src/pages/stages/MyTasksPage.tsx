@@ -10,7 +10,7 @@ import { formatShortDateTime } from '../../lib/format';
 import { canAccess, routeAccess } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
-import { byRemainingSla, StageSlaCell } from './StageSlaCell';
+import { byQueuedAt, StageSlaCell } from './StageSlaCell';
 
 const t = texts.myTasks;
 
@@ -21,7 +21,7 @@ export function MyTasksPage() {
   const query = useQuery({ queryKey: queryKeys.stagesMy, queryFn: stagesApi.my });
   const open = (stage: StageView) => void navigate(`/requests/${stage.requestId}`);
 
-  const rows = [...(query.data?.content ?? [])].filter((s) => s.status === 'IN_PROGRESS').sort(byRemainingSla);
+  const rows = [...(query.data?.content ?? [])].sort(byQueuedAt);
 
   const columns: Column<StageView>[] = [
     {
@@ -31,17 +31,16 @@ export function MyTasksPage() {
       render: (s) => <Cell strong>{s.requestNumber ?? '—'}</Cell>,
     },
     {
-      key: 'company',
-      title: t.columns.company,
-      render: (s) => <TwoLineCell title={s.companyName ?? '—'} subtitle={s.address} />,
-    },
-    {
       key: 'stage',
       title: t.columns.stage,
-      width: 220,
-      render: (s) => <Cell>{t.stageTaken(texts.stageType[s.type], formatShortDateTime(s.takenAt))}</Cell>,
+      render: (s) => (
+        <TwoLineCell
+          title={texts.stageType[s.type]}
+          subtitle={s.takenAt ? t.taken(formatShortDateTime(s.takenAt)) : t.assignedNotTaken}
+        />
+      ),
     },
-    { key: 'sla', title: t.columns.sla, width: 300, render: (s) => <StageSlaCell stage={s} /> },
+    { key: 'sla', title: t.columns.sla, width: 300, render: () => <StageSlaCell /> },
     {
       key: 'action',
       title: '',

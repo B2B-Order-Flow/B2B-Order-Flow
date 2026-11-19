@@ -4,11 +4,10 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useState, type FormEvent } from 'react';
 import { stagesApi } from '../../api/endpoints';
-import { fieldErrors } from '../../api/errors';
+import { fieldErrors, isApiError } from '../../api/errors';
 import type { RequestView, StageView, TechResult, TechResultPayload } from '../../api/types';
 import { FieldRow, SelectField, TextField } from '../../components/ui/FormField';
 import { Notice } from '../../components/ui/Notice';
@@ -39,13 +38,22 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
   const [comment, setComment] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [confirmNone, setConfirmNone] = useState(false);
-  const [returnOpen, setReturnOpen] = useState(false);
+  // «Есть со стройкой» ядро примет с недели 3 (T06): до тех пор — 409 ILLEGAL_TRANSITION
+  const [constructionUnavailable, setConstructionUnavailable] = useState(false);
 
   const save = useRequestAction(
     request.id,
     (payload: TechResultPayload) => stagesApi.techResult(stage.id, payload),
     t.saved,
-    { onSuccess: () => setConfirmNone(false) },
+    {
+      onSuccess: () => setConfirmNone(false),
+      onError: (error, payload) => {
+        const blocked =
+          payload.result === 'WITH_CONSTRUCTION' && isApiError(error) && error.code === 'ILLEGAL_TRANSITION';
+        setConstructionUnavailable(blocked);
+        return blocked;
+      },
+    },
   );
   const serverErrors = fieldErrors(save.error) as Errors;
 
@@ -91,6 +99,7 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
         onChange={(value) => {
           setResult(value);
           setErrors({});
+          setConstructionUnavailable(false);
         }}
         testId="tech-result-option"
         options={[
@@ -126,6 +135,11 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
           />
         </FieldRow>
       ) : null}
+      {result === 'WITH_CONSTRUCTION' && constructionUnavailable ? (
+        <Notice tone="warning" title={t.constructionUnavailableTitle} testId="tech-construction-unavailable">
+          {t.constructionUnavailable}
+        </Notice>
+      ) : null}
       {result === 'NONE' ? (
         <>
           <SelectField
@@ -154,9 +168,6 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
         <Button type="submit" variant="contained" loading={save.isPending && !confirmNone} data-testid="tech-submit">
           {t.submit}
         </Button>
-        <Button variant="outlined" onClick={() => setReturnOpen(true)} data-testid="tech-return">
-          {t.returnToManager}
-        </Button>
       </Box>
 
       <Dialog open={confirmNone} onClose={() => setConfirmNone(false)} maxWidth="xs" fullWidth>
@@ -183,57 +194,6 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
           </Button>
         </DialogActions>
       </Dialog>
-
-      {returnOpen ? <ReturnDialog request={request} stage={stage} onClose={() => setReturnOpen(false)} /> : null}
     </Panel>
-  );
-}
-
-/** «Вернуть менеджеру» на доработку с этапа ТВ, комментарий обязателен (T09b). */
-function ReturnDialog({ request, stage, onClose }: { request: RequestView; stage: StageView; onClose: () => void }) {
-  const [comment, setComment] = useState('');
-  const [touched, setTouched] = useState(false);
-  const action = useRequestAction(
-    request.id,
-    () => stagesApi.returnToManager(stage.id, comment.trim(), stage.version),
-    t.returned,
-    {
-      onSuccess: onClose,
-    },
-  );
-  return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t.returnTitle}</DialogTitle>
-      <DialogContent>
-        <Stack sx={{ gap: '12px', pt: '4px' }}>
-          <TextField
-            label={t.returnComment}
-            required
-            value={comment}
-            onChange={setComment}
-            rows={3}
-            maxLength={4000}
-            error={touched && !comment.trim() ? texts.common.required : undefined}
-            testId="tech-return-comment"
-          />
-          {action.isError ? <Notice tone="error">{t.returnFailed}</Notice> : null}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button variant="text" onClick={onClose}>
-          {texts.common.cancel}
-        </Button>
-        <Button
-          variant="contained"
-          loading={action.isPending}
-          onClick={() => {
-            setTouched(true);
-            if (comment.trim()) action.mutate(undefined);
-          }}
-        >
-          {t.returnToManager}
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 }

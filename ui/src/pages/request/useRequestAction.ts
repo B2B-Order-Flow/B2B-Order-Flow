@@ -7,12 +7,13 @@ import { useNotify } from '../../components/Notifier';
 /**
  * Действие над заявкой: после успеха кладёт ответ в кэш и показывает тост; при конфликте версии
  * или сменившемся статусе перечитывает заявку (api-contract.md §5.2–5.3, ui-requirements.md §10).
+ * options.onError возвращает true, если экран сам показал понятный текст, — тогда общий тост не нужен.
  */
 export function useRequestAction<TArgs>(
   requestId: string,
   action: (args: TArgs) => Promise<unknown>,
   successText: string,
-  options: { onSuccess?: () => void } = {},
+  options: { onSuccess?: () => void; onError?: (error: unknown, args: TArgs) => boolean } = {},
 ) {
   const queryClient = useQueryClient();
   const notify = useNotify();
@@ -28,8 +29,8 @@ export function useRequestAction<TArgs>(
       notify.success(successText);
       options.onSuccess?.();
     },
-    onError: (error) => {
-      notify.error(error);
+    onError: (error, args) => {
+      if (!options.onError?.(error, args)) notify.error(error);
       if (
         isApiError(error) &&
         ['VERSION_CONFLICT', 'ILLEGAL_TRANSITION', 'STAGE_ALREADY_DECIDED'].includes(error.code)

@@ -1,9 +1,11 @@
 import Typography from '@mui/material/Typography';
-import type { RequestView, StageView } from '../../api/types';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys, requestsApi } from '../../api/endpoints';
+import type { RequestView, SlaTimerView, StageView } from '../../api/types';
 import { SlaIndicator } from '../../components/ui/SlaIndicator';
 import { KeyValueGrid, Panel, PanelTitle } from '../../components/ui/Panel';
 import { formatDate, formatMoney } from '../../lib/format';
-import { slaSnapshot } from '../../lib/sla';
+import { slaSnapshot, stageTimer } from '../../lib/sla';
 import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
 import { speedLabel } from './labels';
@@ -52,14 +54,19 @@ export function ExternalDataPanel({ request }: { request: RequestView }) {
   );
 }
 
-/** «Срок этапа»: индикатор и два времени — по SLA и календарное (sla.md §10). */
+/** «Срок этапа»: индикатор и два времени — по SLA и календарное (sla.md §10). Данные — GET /requests/{id}/sla. */
 export function StageSlaPanel({ stage }: { stage: StageView }) {
-  const stageName = texts.stageType[stage.type];
+  const query = useQuery({ queryKey: queryKeys.sla(stage.requestId), queryFn: () => requestsApi.sla(stage.requestId) });
+  const timer = stageTimer(query.data?.timers, stage.id);
   return (
     <Panel gap={12} data-testid="stage-sla">
       <PanelTitle>{t.stageSla}</PanelTitle>
-      {stage.sla ? (
-        <StageSla stageName={stageName} stage={stage} />
+      {query.isPending ? (
+        <Typography variant="body1" sx={{ color: c('text-muted') }}>
+          {texts.common.loading}
+        </Typography>
+      ) : timer ? (
+        <StageSla stageName={texts.stageType[stage.type]} timer={timer} />
       ) : (
         <Typography variant="body1" sx={{ color: c('text-muted') }}>
           {t.slaUnknown}
@@ -69,9 +76,13 @@ export function StageSlaPanel({ stage }: { stage: StageView }) {
   );
 }
 
-function StageSla({ stageName, stage }: { stageName: string; stage: StageView }) {
-  const snapshot = slaSnapshot(stage.sla!);
-  const pauses = stage.sla?.pauseCount ?? 0;
+function StageSla({ stageName, timer }: { stageName: string; timer: SlaTimerView }) {
+  const snapshot = slaSnapshot(timer);
+  const times = [
+    snapshot.slaTimeLabel ? t.slaTime(snapshot.slaTimeLabel) : null,
+    snapshot.calendarTimeLabel ? t.calendarTime(snapshot.calendarTimeLabel) : null,
+    timer.pause ? t.pausedNow(texts.pauseReason[timer.pause.reasonCode]) : null,
+  ].filter(Boolean);
   return (
     <>
       <SlaIndicator
@@ -80,9 +91,11 @@ function StageSla({ stageName, stage }: { stageName: string; stage: StageView })
         state={snapshot.state}
         share={snapshot.share}
       />
-      <Typography variant="caption" sx={{ color: c('text-muted') }}>
-        {t.slaTimes(snapshot.slaTimeLabel, snapshot.calendarTimeLabel, pauses)}
-      </Typography>
+      {times.length ? (
+        <Typography variant="caption" sx={{ color: c('text-muted') }}>
+          {times.join(' ')}
+        </Typography>
+      ) : null}
     </>
   );
 }
