@@ -111,6 +111,9 @@ async def websocket_session(websocket: WebSocket, hub: WebSocketHub, user_id: st
     async with hub.connection(user_id, websocket):
         try:
             while True:
-                await websocket.receive_text()
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                except TimeoutError:
+                    await websocket.send_json({"type": "ping"})
         except WebSocketDisconnect:
             return

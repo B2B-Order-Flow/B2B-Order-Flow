@@ -122,6 +122,11 @@ def get_core_client(settings: Settings = Depends(get_settings)) -> CoreClient:
     return CoreClient(settings)
 
 
+@app.get("/api/v1/ws/ticket", operation_id="issue_websocket_ticket")
+async def issue_websocket_ticket(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/ws/ticket")
+
+
 @app.get("/health")
 async def health(client: CoreClient = Depends(get_core_client)) -> dict[str, Any]:
     try:
