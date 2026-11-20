@@ -19,12 +19,13 @@ insert into app_user (login, password_hash, full_name, email) values
     ('o.nikitin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Олег Никитин', 'o.nikitin@demo.test'),
     ('i.pavlova', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Ирина Павлова', 'i.pavlova@demo.test'),
     ('g.tikhonov', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Глеб Тихонов', 'g.tikhonov@demo.test'),
-    ('owner.severtorg', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Севертoрга', 'owner.severtorg@demo.test'),
+    ('owner.severtorg', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Северторга', 'owner.severtorg@demo.test'),
     ('owner.gbu7', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец больницы № 7', 'owner.gbu7@demo.test'),
     ('owner.timeout', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Таймаута', 'owner.timeout@demo.test'),
     ('owner.slow', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Медленного', 'owner.slow@demo.test'),
     ('owner.flaky', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Шаткого', 'owner.flaky@demo.test'),
-    ('owner.deaf', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Глухого', 'owner.deaf@demo.test');
+    ('owner.deaf', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Глухого', 'owner.deaf@demo.test')
+on conflict (login) do nothing;
 
 insert into operator_role (user_id, role)
 select id, role
@@ -55,7 +56,8 @@ insert into company (name, inn, status) values
     ('ООО «Таймаут»', '9999005565', 'ACTIVE'),
     ('ООО «Медленный»', '9999000052', 'ACTIVE'),
     ('ООО «Шаткий»', '9999000013', 'ACTIVE'),
-    ('ООО «Глухой»', '9999000020', 'ACTIVE');
+    ('ООО «Глухой»', '9999000020', 'ACTIVE')
+on conflict (inn) do nothing;
 
 insert into company_membership (company_id, user_id)
 select c.id, u.id
@@ -74,7 +76,8 @@ join app_user u on (c.inn, u.login) in (
     ('9999000052', 'owner.slow'),
     ('9999000013', 'owner.flaky'),
     ('9999000020', 'owner.deaf')
-);
+)
+on conflict do nothing;
 
 insert into membership_role (membership_id, role)
 select cm.id, roles.role
@@ -99,11 +102,3 @@ join (values
     on roles.inn = c.inn and roles.login = u.login
 on conflict do nothing;
 
--- Normalize the company and owner spelling to the seed specification.
-update company
-set name = replace(name, 'o', chr(1086))
-where inn = '7844002230';
-
-update app_user
-set full_name = replace(full_name, 'o', chr(1086))
-where login = 'owner.severtorg';
