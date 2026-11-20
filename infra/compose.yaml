@@ -17,6 +17,8 @@ services:
       CORE_DB_MIGRATION_PASSWORD: ${CORE_DB_MIGRATION_PASSWORD:?задай CORE_DB_MIGRATION_PASSWORD в .env}
       CORE_DB_APP_USER: ${CORE_DB_APP_USER:?задай CORE_DB_APP_USER в .env}
       CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?задай CORE_DB_APP_PASSWORD в .env}
+      CORE_DB_BACKUP_USER: ${CORE_DB_BACKUP_USER:?задай CORE_DB_BACKUP_USER в .env}
+      CORE_DB_BACKUP_PASSWORD: ${CORE_DB_BACKUP_PASSWORD:?задай CORE_DB_BACKUP_PASSWORD в .env}
     volumes:
       - core-db-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -107,6 +109,29 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+
+  nginx:
+    build:
+      context: ../ui
+    restart: unless-stopped
+    # Открытые WebSocket не дают Nginx остановиться сразу, Docker по умолчанию ждёт 10 с
+    stop_grace_period: 5s
+    depends_on:
+      bff-gateway:
+        condition: service_healthy
+    environment:
+      RATE_API: ${RATE_API:-100}
+      RATE_LOGIN: ${RATE_LOGIN:-10}
+      NGINX_ENVSUBST_FILTER: ^RATE_
+    ports:
+      # Наружу открыт только Nginx (docs/system/nfr.md, раздел 8)
+      - "127.0.0.1:${HTTP_PORT:-80}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
 
 volumes:
   core-db-data:

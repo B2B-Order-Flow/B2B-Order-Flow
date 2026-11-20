@@ -7,3 +7,9 @@ services:
     environment:
       SLA_PROFILE: DEMO
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/demo
+
+  nginx:
+    environment:
+      # Лимиты запросов в профиле demo выше, иначе Playwright и сид упираются в лимит с одного адреса (nfr.md, раздел 7)
+      RATE_API: "6000"
+      RATE_LOGIN: "600"

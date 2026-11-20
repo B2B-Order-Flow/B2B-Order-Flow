@@ -25,10 +25,7 @@ insert into app_user (login, password_hash, full_name, email) values
     ('owner.slow', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Медленного', 'owner.slow@demo.test'),
     ('owner.flaky', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Шаткого', 'owner.flaky@demo.test'),
     ('owner.deaf', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Глухого', 'owner.deaf@demo.test')
-on conflict (lower(login)) do nothing;
-
-update app_user
-set password_hash = '$2a$10$1Gv2JAoIHPBhcucAvVT.AO3Eo.IwavR5.vPfkFVtNfKHbw4vd1gG.';
+on conflict do nothing;
 
 insert into operator_role (user_id, role)
 select id, role

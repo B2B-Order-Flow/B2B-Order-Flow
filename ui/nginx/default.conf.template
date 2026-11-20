@@ -1,0 +1,82 @@
+# Единая точка входа (docs/system/nfr.md, разделы 6-8): раздаёт интерфейс, проксирует /api и /ws в шлюз.
+# Лимиты RATE_API и RATE_LOGIN (запросов в минуту с одного адреса) подставляет envsubst при старте,
+# другие переменные не трогаются (NGINX_ENVSUBST_FILTER в compose).
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+limit_req_zone $binary_remote_addr zone=api:10m   rate=${RATE_API}r/m;
+limit_req_zone $binary_remote_addr zone=login:10m rate=${RATE_LOGIN}r/m;
+limit_req_status 429;
+
+# Одна строка JSON на запрос; X-Correlation-Id клиента и значение из ответа шлюза (docs/architecture/logging.md).
+# Пишем $uri без строки запроса: в ней может быть билет WebSocket, токенов в логах быть не должно (nfr.md, раздел 8)
+log_format json_access escape=json
+    '{"time":"$time_iso8601","remote":"$remote_addr","method":"$request_method","uri":"$uri",'
+    '"status":$status,"bytes":$body_bytes_sent,"requestTime":$request_time,'
+    '"correlationId":"$upstream_http_x_correlation_id","requestCorrelationId":"$http_x_correlation_id"}';
+
+server {
+    listen 8080;
+    server_name _;
+    server_tokens off;
+    root /usr/share/nginx/html;
+    access_log /dev/stdout json_access;
+
+    # Адрес шлюза берётся из DNS Docker при каждом запросе: если шлюз перезапустился с другим IP,
+    # Nginx не залипает на старом, а при остановленном шлюзе отдаёт 502 и страницу /50x.html
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $bff http://bff-gateway:8000;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    # Nginx крайний узел: заголовок клиента не доверяем, а перезаписываем
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+    client_max_body_size 1m;
+    error_page 502 503 504 /50x.html;
+
+    location = /50x.html {
+        internal;
+    }
+
+    location = /api/v1/auth/login {
+        limit_req zone=login burst=5 nodelay;
+        proxy_pass $bff;
+    }
+
+    # Вложения: 11 МБ, чтобы 10 МБ файла и служебные поля multipart не упирались в 413 раньше проверки ядра
+    location ~ ^/api/v1/requests/[^/]+/attachments$ {
+        client_max_body_size 11m;
+        limit_req zone=api burst=20 nodelay;
+        proxy_pass $bff;
+    }
+
+    location /api/ {
+        limit_req zone=api burst=20 nodelay;
+        proxy_read_timeout 60s;
+        proxy_pass $bff;
+    }
+
+    # WebSocket: шлюз шлёт ping раз в 30 с, держим соединение дольше
+    location = /ws {
+        proxy_read_timeout 3600s;
+        proxy_pass $bff;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}
