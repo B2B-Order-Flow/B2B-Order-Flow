@@ -287,6 +287,41 @@ describe('UI-08. Результат ТВ «со стройкой»', () => {
   });
 });
 
+describe('UI-12. Мои задачи', () => {
+  it('показывает только этапы в работе и в порядке ядра (по остатку SLA)', async () => {
+    signIn('TECH_SPECIALIST');
+    mockApi({
+      'GET /me': () => jsonResponse(200, orlov),
+      'GET /stages/my': () =>
+        jsonResponse(
+          200,
+          page([
+            stage({
+              id: 's-2',
+              requestNumber: 'REQ-2026-000140',
+              status: 'IN_PROGRESS',
+              createdAt: '2026-11-15T10:00:00Z',
+            }),
+            stage({ id: 's-3', requestNumber: 'REQ-2026-000141', status: 'QUEUED', assigneeId: 'u-orlov' }),
+            stage({
+              id: 's-1',
+              requestNumber: 'REQ-2026-000139',
+              status: 'IN_PROGRESS',
+              createdAt: '2026-11-10T10:00:00Z',
+            }),
+          ]),
+        ),
+    });
+    renderApp('/my-tasks');
+
+    const rows = await screen.findAllByTestId('task-row');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText('REQ-2026-000140')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('REQ-2026-000139')).toBeInTheDocument();
+    expect(screen.queryByText('REQ-2026-000141')).not.toBeInTheDocument();
+  });
+});
+
 describe('UI-11. Очередь роли', () => {
   it('сверху этапы, которые ждут дольше; срок — «—»; «Взять» открывает карточку заявки', async () => {
     signIn('TECH_SPECIALIST');

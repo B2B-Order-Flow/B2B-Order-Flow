@@ -381,7 +381,6 @@ export const texts = {
     intro: 'Этапы, которые вы взяли. Откройте заявку, чтобы внести результат.',
     columns: { request: 'Заявка', stage: 'Этап', sla: 'Срок этапа' },
     taken: (takenAt: string) => `взят ${takenAt}`,
-    assignedNotTaken: 'назначен вам координатором',
     open: 'Открыть',
     empty: 'Задач нет. Возьмите этап из очереди',
     toQueue: 'Открыть очередь',

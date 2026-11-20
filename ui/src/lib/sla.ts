@@ -47,17 +47,21 @@ export function slaSnapshot(timer: SlaTimerView): SlaSnapshot {
   const elapsed =
     timer.elapsedSlaSeconds ??
     (normSeconds !== null && timer.remainingSlaSeconds !== undefined ? normSeconds - timer.remainingSlaSeconds : null);
-  const share = normSeconds && elapsed !== null ? elapsed / normSeconds : timer.overdue ? 1 : 0;
+  const share = normSeconds && elapsed !== null ? elapsed / normSeconds : 0;
+
+  const remaining = timer.remainingSlaSeconds;
+  // overdue в контракте необязателен: нарушение видно и по отрицательному остатку, и по breachedAt
+  const breached =
+    timer.overdue === true || (remaining !== undefined && remaining < 0) || timer.breachedAt !== undefined;
 
   let state: SlaState = 'ok';
   if (timer.status === 'PAUSED') state = 'paused';
-  else if (timer.overdue) state = 'breach';
+  else if (breached) state = 'breach';
   else if (timer.warnedAt || share >= 0.75) state = 'warn';
 
-  const remaining = timer.remainingSlaSeconds;
   let valueLabel: string;
   if (state === 'paused') valueLabel = 'пауза';
-  else if (timer.overdue) {
+  else if (breached) {
     // Насколько просрочено: отрицательный остаток или время с момента нарушения
     const overSeconds =
       remaining !== undefined && remaining < 0

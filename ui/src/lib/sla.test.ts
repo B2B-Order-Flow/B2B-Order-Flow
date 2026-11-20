@@ -38,6 +38,21 @@ describe('индикатор срока (sla.md §10)', () => {
     expect(slaSnapshot(timer(1500)).valueLabel).toBe('просрочено на 1 ч');
   });
 
+  it('просрочка без overdue: по отрицательному остатку или по breachedAt (overdue в контракте необязателен)', () => {
+    const negative = slaSnapshot(timer(1500, { overdue: undefined }));
+    expect(negative.state).toBe('breach');
+    expect(negative.valueLabel).toBe('просрочено на 1 ч');
+    const byBreachedAt = slaSnapshot(
+      timer(1440, {
+        overdue: undefined,
+        remainingSlaSeconds: 0,
+        breachedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+      }),
+    );
+    expect(byBreachedAt.state).toBe('breach');
+    expect(byBreachedAt.valueLabel).toBe('просрочено на 30 мин');
+  });
+
   it('стройка и контрольный срок ТВ — в календарных днях', () => {
     expect(slaSnapshot(timer(0, { stageType: 'CONSTRUCTION', normMinutes: 14400 })).normLabel).toBe('норматив 10 д.');
     expect(slaSnapshot(timer(0, { kind: 'TECH_RESULT', stageType: undefined, normMinutes: 43200 })).normLabel).toBe(

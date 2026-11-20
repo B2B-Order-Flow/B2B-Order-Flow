@@ -10,7 +10,7 @@ import { formatShortDateTime } from '../../lib/format';
 import { canAccess, routeAccess } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
-import { byQueuedAt, StageSlaCell } from './StageSlaCell';
+import { StageSlaCell } from './StageSlaCell';
 
 const t = texts.myTasks;
 
@@ -21,7 +21,9 @@ export function MyTasksPage() {
   const query = useQuery({ queryKey: queryKeys.stagesMy, queryFn: stagesApi.my });
   const open = (stage: StageView) => void navigate(`/requests/${stage.requestId}`);
 
-  const rows = [...(query.data?.content ?? [])].sort(byQueuedAt);
+  // Только этапы в работе: у этапа QUEUED в карточке нет формы действия. Порядок — от ядра,
+  // оно сортирует «Мои задачи» по остатку SLA (core-api.yaml, /stages/my)
+  const rows = (query.data?.content ?? []).filter((s) => s.status === 'IN_PROGRESS');
 
   const columns: Column<StageView>[] = [
     {
@@ -36,7 +38,7 @@ export function MyTasksPage() {
       render: (s) => (
         <TwoLineCell
           title={texts.stageType[s.type]}
-          subtitle={s.takenAt ? t.taken(formatShortDateTime(s.takenAt)) : t.assignedNotTaken}
+          subtitle={s.takenAt ? t.taken(formatShortDateTime(s.takenAt)) : undefined}
         />
       ),
     },
