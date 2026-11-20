@@ -17,6 +17,8 @@ services:
       CORE_DB_MIGRATION_PASSWORD: ${CORE_DB_MIGRATION_PASSWORD:?задай CORE_DB_MIGRATION_PASSWORD в .env}
       CORE_DB_APP_USER: ${CORE_DB_APP_USER:?задай CORE_DB_APP_USER в .env}
       CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?задай CORE_DB_APP_PASSWORD в .env}
+      CORE_DB_BACKUP_USER: ${CORE_DB_BACKUP_USER:?задай CORE_DB_BACKUP_USER в .env}
+      CORE_DB_BACKUP_PASSWORD: ${CORE_DB_BACKUP_PASSWORD:?задай CORE_DB_BACKUP_PASSWORD в .env}
     volumes:
       - core-db-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro

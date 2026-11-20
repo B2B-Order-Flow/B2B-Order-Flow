@@ -7,7 +7,8 @@ set -eu
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v db="$POSTGRES_DB" \
   -v migrator="$CORE_DB_MIGRATION_USER" -v migrator_pw="$CORE_DB_MIGRATION_PASSWORD" \
-  -v app="$CORE_DB_APP_USER" -v app_pw="$CORE_DB_APP_PASSWORD" <<'SQL'
+  -v app="$CORE_DB_APP_USER" -v app_pw="$CORE_DB_APP_PASSWORD" \
+  -v backup="$CORE_DB_BACKUP_USER" -v backup_pw="$CORE_DB_BACKUP_PASSWORD" <<'SQL'
 CREATE ROLE :"migrator" LOGIN PASSWORD :'migrator_pw';
 CREATE ROLE :"app" LOGIN PASSWORD :'app_pw';
 
@@ -26,4 +27,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app";
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO :"app";
+-- Роль для pg_dump: читает все данные, писать не может
+CREATE ROLE :"backup" LOGIN PASSWORD :'backup_pw';
+GRANT CONNECT ON DATABASE :"db" TO :"backup";
+GRANT pg_read_all_data TO :"backup";
 SQL
