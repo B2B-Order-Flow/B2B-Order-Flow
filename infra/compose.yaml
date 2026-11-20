@@ -22,6 +22,9 @@ services:
     volumes:
       - core-db-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - default
+      - backup
     healthcheck:
       # -h 127.0.0.1: пока идёт инициализация (скрипты в initdb.d), временный сервер слушает
       # только сокет, и проверка без -h сообщила бы «готов» раньше, чем созданы роли
@@ -29,6 +32,27 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
+    depends_on:
+      core-db:
+        condition: service_healthy
+    environment:
+      PGHOST: core-db
+      PGDATABASE: ${CORE_DB_NAME:?задай CORE_DB_NAME в .env}
+      PGUSER: ${CORE_DB_BACKUP_USER:?задай CORE_DB_BACKUP_USER в .env}
+      PGPASSWORD: ${CORE_DB_BACKUP_PASSWORD:?задай CORE_DB_BACKUP_PASSWORD в .env}
+      BACKUP_CRON: ${BACKUP_CRON:-0 3 * * *}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - core-backups:/backups
+      - ./backup/entrypoint.sh:/entrypoint.sh:ro
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+    networks:
+      - backup
 
   mock-crm:
     image: wiremock/wiremock:3.13.2
@@ -135,3 +159,8 @@ services:
 
 volumes:
   core-db-data:
+  core-backups:
+
+networks:
+  backup:
+    internal: true
