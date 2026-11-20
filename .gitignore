@@ -31,4 +31,5 @@ dist/
 # Данные и логи стенда
 infra/backup/*
 !infra/backup/README.md
+!infra/backup/*.sh
 *.log
