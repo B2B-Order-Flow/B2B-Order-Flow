@@ -26,7 +26,9 @@ test.describe('SC-01 Стандартная заявка', () => {
       const sent = await act(request, client.token, `/requests/${req.id}/submit`, { version: req.version });
       expect(sent.status).toBe('WITH_MANAGER');
       expect(sent.integrationError).not.toBe(true);
-      expect(sent.managerId).toBe(manager.userId);
+      // managerId клиенту не отдаётся (core-api.yaml), смотрим карточку глазами координатора
+      const card = await fresh(req.id);
+      expect(card.managerId).toBe(manager.userId);
       return sent;
     });
 
