@@ -134,7 +134,8 @@ public abstract class AbstractIntegrationTest {
     @BeforeEach
     void cleanDatabase() {
         jdbc.execute("""
-                truncate table audit_log, external_check, request_revision, request_stage,
+                truncate table audit_log, notification, ws_ticket, sla_pause, sla_timer,
+                    external_check, request_revision, request_stage,
                     service_offer, idempotency_key, request, membership_role, company_membership,
                     operator_role, company, app_user cascade
                 """);

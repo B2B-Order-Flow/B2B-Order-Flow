@@ -21,4 +21,9 @@ public enum RequestStageType {
                 || this == PROCUREMENT_APPROVAL
                 || this == MGMT_APPROVAL;
     }
+
+    /** Первый этап исполнения включает T14 (status-model.md, 6.1.2). */
+    public boolean isFirstExecution() {
+        return this == CONSTRUCTION || this == INSTALLATION;
+    }
 }
