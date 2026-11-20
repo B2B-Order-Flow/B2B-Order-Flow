@@ -25,7 +25,7 @@ insert into app_user (login, password_hash, full_name, email) values
     ('owner.slow', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Медленного', 'owner.slow@demo.test'),
     ('owner.flaky', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Шаткого', 'owner.flaky@demo.test'),
     ('owner.deaf', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Владелец Глухого', 'owner.deaf@demo.test')
-on conflict (login) do nothing;
+on conflict do nothing;
 
 insert into operator_role (user_id, role)
 select id, role
@@ -46,18 +46,23 @@ cross join (values
 where app_user.login = roles.login
 on conflict do nothing;
 
-insert into company (name, inn, status) values
+insert into company (name, inn, status)
+select v.name, v.inn, v.status
+from (values
     ('ИП Соколов А. В.', '770112345127', 'ACTIVE'),
     ('ООО «Логистик Плюс»', '7725012341', 'ACTIVE'),
     ('АО «Агрохолдинг Заря»', '5050123455', 'ACTIVE'),
     ('ООО «Вектор»', '7811001128', 'PENDING'),
-    ('ООО «Севертoрг»', '7844002230', 'ACTIVE'),
+    ('ООО «Северторг»', '7844002230', 'ACTIVE'),
     ('ГБУ «Городская больница № 7»', '7719003349', 'ACTIVE'),
     ('ООО «Таймаут»', '9999005565', 'ACTIVE'),
     ('ООО «Медленный»', '9999000052', 'ACTIVE'),
     ('ООО «Шаткий»', '9999000013', 'ACTIVE'),
     ('ООО «Глухой»', '9999000020', 'ACTIVE')
-on conflict (inn) do nothing;
+) as v(name, inn, status)
+where not exists (
+    select 1 from company c where c.inn = v.inn
+);
 
 insert into company_membership (company_id, user_id)
 select c.id, u.id
