@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 
 BASE_URL = os.getenv("BFF_URL", "http://localhost:8000").rstrip("/")
 LOGIN = os.getenv("DEMO_LOGIN", "a.sokolov")
-PASSWORD = os.getenv("DEMO_PASSWORD", "password")
+PASSWORD = os.getenv("DEMO_PASSWORD")
 
 
 def call(method: str, path: str, token: str | None = None, body: dict | None = None, **headers: str) -> dict:
@@ -40,6 +40,8 @@ def call(method: str, path: str, token: str | None = None, body: dict | None = N
 
 def main() -> int:
     try:
+        if not PASSWORD:
+            raise RuntimeError("Set DEMO_PASSWORD before running the demo request seed")
         login = call("POST", "/api/v1/auth/login", body={"login": LOGIN, "password": PASSWORD})
         token = login["accessToken"]
         user = call("GET", "/api/v1/me", token=token)
