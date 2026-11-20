@@ -41,7 +41,7 @@ export function RequestOverview({ request }: { request: RequestView }) {
         )
       ) : null}
 
-      <Box sx={{ display: 'flex', gap: '12px' }} data-testid="request-facts">
+      <Box sx={{ display: 'flex', gap: '12px' }} data-testid="request-card-facts">
         <Fact label={t.speed} value={speedLabel(request)} />
         <Fact
           label={t.now}
@@ -182,7 +182,7 @@ function RoutePanel({ request, client }: { request: RequestView; client: boolean
     index < current ? 'done' : index === current ? (stopped ? 'stopped' : 'current') : 'future';
 
   return (
-    <Panel gap={14} sx={{ flex: 1 }} data-testid="request-route">
+    <Panel gap={14} sx={{ flex: 1 }} data-testid="request-card-route">
       <PanelTitle>{t.route}</PanelTitle>
       {t.phases.map((phase, index) =>
         index === 0 && request.status === 'DATA_CHECK' && !client ? (
@@ -284,7 +284,7 @@ function HistoryPanel({ request }: { request: RequestView }) {
   });
 
   return (
-    <Panel gap={14} data-testid="request-history">
+    <Panel gap={14} data-testid="request-card-history">
       <PanelTitle>{t.history}</PanelTitle>
       {query.isPending ? (
         <LoadingState />

@@ -165,7 +165,12 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
         </>
       ) : null}
       <Box sx={{ display: 'flex', gap: '12px', pt: '4px' }}>
-        <Button type="submit" variant="contained" loading={save.isPending && !confirmNone} data-testid="tech-submit">
+        <Button
+          type="submit"
+          variant="contained"
+          loading={save.isPending && !confirmNone}
+          data-testid="action-tech-result"
+        >
           {t.submit}
         </Button>
       </Box>
@@ -188,7 +193,7 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
               const payload = buildPayload();
               if (payload) save.mutate(payload);
             }}
-            data-testid="tech-none-confirm"
+            data-testid="action-tech-result-confirm"
           >
             {t.noneConfirm}
           </Button>

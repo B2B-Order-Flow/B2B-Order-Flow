@@ -106,7 +106,7 @@ export function QueuePage() {
       width: 110,
       render: (s) =>
         coordinator ? (
-          <Button variant="outlined" onClick={() => setAssigning(s)} data-testid="stage-assign">
+          <Button variant="outlined" onClick={() => setAssigning(s)} data-testid="action-assign">
             {t.assign}
           </Button>
         ) : (
@@ -115,7 +115,7 @@ export function QueuePage() {
             loading={claim.isPending && claim.variables?.id === s.id}
             disabled={claim.isPending}
             onClick={() => claim.mutate(s)}
-            data-testid="stage-claim"
+            data-testid="action-claim"
           >
             {t.claim}
           </Button>
@@ -152,7 +152,7 @@ export function QueuePage() {
           rowKey={(s) => s.id}
           gap={20}
           rowPaddingY={16}
-          rowTestId="queue-row"
+          rowTestId={(s) => `queue-row-${s.requestNumber ?? s.id}`}
           testId="queue-table"
         />
       )}

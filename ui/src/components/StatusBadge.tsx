@@ -63,8 +63,8 @@ export function Chip({ tone, label, testId }: { tone: ChipTone; label: string; t
   );
 }
 
-export function StatusBadge({ status }: { status: RequestStatus }) {
-  return <Chip tone={STATUS_TONES[status]} label={texts.requestStatus[status].label} testId="status-badge" />;
+export function StatusBadge({ status, testId = 'status-badge' }: { status: RequestStatus; testId?: string }) {
+  return <Chip tone={STATUS_TONES[status]} label={texts.requestStatus[status].label} testId={testId} />;
 }
 
 export function CompanyStatusBadge({ status }: { status: CompanyStatus }) {

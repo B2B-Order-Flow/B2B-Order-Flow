@@ -103,7 +103,7 @@ export function CommercialTermsForm({ request }: { request: RequestView }) {
         testId="terms-contract"
       />
       <Box>
-        <Button type="submit" variant="contained" loading={submit.isPending} data-testid="terms-submit">
+        <Button type="submit" variant="contained" loading={submit.isPending} data-testid="action-commercial-terms">
           {t.submit}
         </Button>
       </Box>

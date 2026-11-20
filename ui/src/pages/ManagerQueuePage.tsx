@@ -109,13 +109,13 @@ export function ManagerQueuePage() {
               disabled={claim.isPending}
               loading={claim.isPending && claim.variables?.id === r.id}
               onClick={() => claim.mutate(r)}
-              data-testid="manager-claim"
+              data-testid="action-claim"
             >
               {t.claim}
             </Button>
           ) : null}
           {coordinator ? (
-            <Button variant="outlined" onClick={() => setAssigning(r)} data-testid="manager-assign">
+            <Button variant="outlined" onClick={() => setAssigning(r)} data-testid="action-assign-manager">
               {texts.requestCard.assignManager}
             </Button>
           ) : null}
@@ -124,7 +124,7 @@ export function ManagerQueuePage() {
               variant="contained"
               loading={recheck.isPending && recheck.variables?.id === r.id}
               onClick={() => recheck.mutate(r)}
-              data-testid="manager-recheck"
+              data-testid="action-recheck-data"
             >
               {texts.requestCard.recheck}
             </Button>
@@ -153,7 +153,7 @@ export function ManagerQueuePage() {
           gap={20}
           rowPaddingY={16}
           onRowClick={(r) => void navigate(`/requests/${r.id}`)}
-          rowTestId="manager-queue-row"
+          rowTestId={(r) => `manager-queue-row-${r.number}`}
         />
       )}
       {assigning ? <AssignManagerDialog request={assigning} onClose={() => setAssigning(null)} /> : null}

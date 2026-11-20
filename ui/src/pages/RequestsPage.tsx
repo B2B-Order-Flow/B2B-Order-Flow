@@ -182,7 +182,7 @@ export function RequestsPage() {
             columns={columns}
             rows={data.content}
             rowKey={(r) => r.id}
-            rowTestId="requests-row"
+            rowTestId={(r) => `requests-row-${r.number}`}
             testId="requests-table"
             onRowClick={(r) =>
               void navigate(r.status === 'DRAFT' && canCreate ? `/requests/${r.id}/edit` : `/requests/${r.id}`)

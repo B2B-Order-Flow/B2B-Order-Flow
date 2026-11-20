@@ -51,7 +51,7 @@ export function RequestHeader({ request }: { request: RequestView }) {
   const actions = (
     <>
       {coordinator && !TERMINAL.has(request.status) ? (
-        <Button variant="outlined" onClick={() => setAssignOpen(true)} data-testid="request-assign-manager">
+        <Button variant="outlined" onClick={() => setAssignOpen(true)} data-testid="action-assign-manager">
           {request.managerId ? t.reassignManager : t.assignManager}
         </Button>
       ) : null}
@@ -60,7 +60,7 @@ export function RequestHeader({ request }: { request: RequestView }) {
           variant="contained"
           loading={recheck.isPending}
           onClick={() => recheck.mutate(undefined)}
-          data-testid="request-recheck"
+          data-testid="action-recheck-data"
         >
           {t.recheck}
         </Button>
@@ -74,7 +74,7 @@ export function RequestHeader({ request }: { request: RequestView }) {
       request.status === 'CONTRACT_SIGNING' &&
       contractTypeOf(request) === 'OFFER' &&
       canCreateRequest(activeRole) ? (
-        <Button variant="contained" onClick={() => setOfferOpen(true)} data-testid="request-accept-offer">
+        <Button variant="contained" onClick={() => setOfferOpen(true)} data-testid="action-accept-offer">
           {t.acceptOffer}
         </Button>
       ) : null}
@@ -87,13 +87,13 @@ export function RequestHeader({ request }: { request: RequestView }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '20px' }}>
         <Stack sx={{ gap: '10px', minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <Typography variant="subtitle1" sx={{ color: c('text-muted') }} data-testid="request-number">
+            <Typography variant="subtitle1" sx={{ color: c('text-muted') }} data-testid="request-card-number">
               {request.number}
             </Typography>
-            <StatusBadge status={request.status} />
+            <StatusBadge status={request.status} testId="request-card-status" />
             {!client && request.integrationError ? <IntegrationErrorBadge /> : null}
           </Box>
-          <Typography variant="h1" component="h1" data-testid="request-title">
+          <Typography variant="h1" component="h1" data-testid="request-card-title">
             {requestTitle(request)}
           </Typography>
           <Box sx={{ display: 'flex', columnGap: '20px', rowGap: '4px', flexWrap: 'wrap' }}>
@@ -203,7 +203,7 @@ function AcceptOfferDialog({ request, onClose }: { request: RequestView; onClose
           variant="contained"
           loading={accept.isPending}
           onClick={() => accept.mutate(undefined)}
-          data-testid="accept-offer-submit"
+          data-testid="action-accept-offer-confirm"
         >
           {t.acceptOfferSubmit}
         </Button>

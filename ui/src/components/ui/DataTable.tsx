@@ -34,7 +34,8 @@ export function DataTable<T>({
   gap?: number;
   rowPaddingY?: number;
   testId?: string;
-  rowTestId?: string;
+  /** Метка строки: `<экран>-row-<номер заявки>` (ui-requirements.md §11.3). */
+  rowTestId?: (row: T) => string;
   /** Подпись таблицы для экранного диктора. */
   label?: string;
 }) {
@@ -100,7 +101,7 @@ export function DataTable<T>({
             <Box
               component="tr"
               key={rowKey(row)}
-              data-testid={rowTestId}
+              data-testid={rowTestId?.(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               onKeyDown={onRowClick ? (event: KeyboardEvent) => onKeyDown(event, row) : undefined}
               tabIndex={onRowClick ? 0 : undefined}

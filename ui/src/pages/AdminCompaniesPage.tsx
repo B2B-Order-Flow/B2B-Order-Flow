@@ -49,10 +49,10 @@ export function AdminCompaniesPage() {
       width: 264,
       render: (r) => (
         <Box sx={{ display: 'flex', gap: '8px' }}>
-          <Button variant="contained" onClick={() => setConfirming(r)} data-testid="company-confirm">
+          <Button variant="contained" onClick={() => setConfirming(r)} data-testid="action-confirm-company">
             {t.confirm}
           </Button>
-          <Button variant="outlined" onClick={() => setRejecting(r)} data-testid="company-reject">
+          <Button variant="outlined" onClick={() => setRejecting(r)} data-testid="action-reject-company">
             {t.reject}
           </Button>
         </Box>
@@ -76,7 +76,7 @@ export function AdminCompaniesPage() {
           columns={columns}
           rows={query.data.content}
           rowKey={(r) => r.id}
-          rowTestId="company-row"
+          rowTestId={(r) => `admin-companies-row-${r.inn}`}
         />
       )}
 
@@ -161,7 +161,7 @@ function ConfirmDialog({
           variant="contained"
           loading={mutation.isPending}
           onClick={() => mutation.mutate()}
-          data-testid="company-confirm-submit"
+          data-testid="action-confirm-company-confirm"
         >
           {t.confirm}
         </Button>
@@ -205,7 +205,7 @@ function RejectDialog({
             maxLength={1000}
             placeholder={t.reasonPlaceholder}
             error={reasonError}
-            testId="company-reject-reason"
+            testId="admin-companies-reject-reason"
           />
           <TextField label={t.comment} value={comment} onChange={setComment} maxLength={4000} rows={3} />
           {mutation.isError ? <Notice tone="error">{errorMessage(mutation.error, { mutation: true })}</Notice> : null}
@@ -222,7 +222,7 @@ function RejectDialog({
             setTouched(true);
             if (reason.trim()) mutation.mutate();
           }}
-          data-testid="company-reject-submit"
+          data-testid="action-reject-company-confirm"
         >
           {t.reject}
         </Button>

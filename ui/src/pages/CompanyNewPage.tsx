@@ -157,7 +157,7 @@ function CompanyForm({ login, prefillFrom }: { login: string; prefillFrom?: stri
               value={current.name}
               onChange={set('name')}
               error={errors.name}
-              testId="company-name"
+              testId="company-new-name"
             />
             <TextField
               label={t.inn}
@@ -167,7 +167,7 @@ function CompanyForm({ login, prefillFrom }: { login: string; prefillFrom?: stri
               error={errors.inn}
               inputMode="numeric"
               maxLength={12}
-              testId="company-inn"
+              testId="company-new-inn"
             />
           </FieldRow>
           <FieldRow>
@@ -178,7 +178,7 @@ function CompanyForm({ login, prefillFrom }: { login: string; prefillFrom?: stri
               error={errors.kpp}
               inputMode="numeric"
               maxLength={9}
-              testId="company-kpp"
+              testId="company-new-kpp"
             />
             <TextField
               label={t.ogrn}
@@ -187,7 +187,7 @@ function CompanyForm({ login, prefillFrom }: { login: string; prefillFrom?: stri
               error={errors.ogrn}
               inputMode="numeric"
               maxLength={15}
-              testId="company-ogrn"
+              testId="company-new-ogrn"
             />
           </FieldRow>
           <TextField
@@ -196,10 +196,10 @@ function CompanyForm({ login, prefillFrom }: { login: string; prefillFrom?: stri
             value={current.legalAddress}
             onChange={set('legalAddress')}
             error={errors.legalAddress}
-            testId="company-legal-address"
+            testId="company-new-legal-address"
           />
           <Box sx={{ display: 'flex', gap: '12px' }}>
-            <Button type="submit" variant="contained" loading={submitting} data-testid="company-submit">
+            <Button type="submit" variant="contained" loading={submitting} data-testid="company-new-submit">
               {t.submit}
             </Button>
             <Button
@@ -276,7 +276,7 @@ function CompanyStatusView({ companyId, onResubmit }: { companyId: string; onRes
                 {view.rejectReason ?? t.rejectReasonUnknown}
               </Notice>
               <Box>
-                <Button variant="contained" onClick={onResubmit} data-testid="company-resubmit">
+                <Button variant="contained" onClick={onResubmit} data-testid="company-new-resubmit">
                   {t.resubmit}
                 </Button>
               </Box>

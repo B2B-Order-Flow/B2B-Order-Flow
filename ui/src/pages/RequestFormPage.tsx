@@ -266,7 +266,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
             placeholder={t.addressPlaceholder}
             error={errors.address}
             maxLength={500}
-            testId="request-address"
+            testId="request-form-address"
           />
           <FieldRow>
             <TextField
@@ -276,7 +276,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               onChange={set('speed')}
               inputMode="numeric"
               error={errors.speed}
-              testId="request-speed"
+              testId="request-form-speed"
             />
             <TextField
               label={t.desiredDate}
@@ -285,7 +285,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               value={form.desiredDate}
               onChange={set('desiredDate')}
               error={errors.desiredDate}
-              testId="request-date"
+              testId="request-form-date"
             />
           </FieldRow>
           <FieldRow>
@@ -296,7 +296,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               onChange={set('contactName')}
               error={errors.contactName}
               autoComplete="name"
-              testId="request-contact-name"
+              testId="request-form-contact-name"
             />
             <TextField
               label={t.contactPhone}
@@ -308,7 +308,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               placeholder={t.phonePlaceholder}
               error={errors.contactPhone}
               autoComplete="tel"
-              testId="request-contact-phone"
+              testId="request-form-contact-phone"
             />
           </FieldRow>
           <SelectField
@@ -321,7 +321,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               label: texts.contractType[value],
             }))}
             error={errors.contractPreference}
-            testId="request-contract"
+            testId="request-form-contract"
           />
           <TextField
             label={t.comment}
@@ -332,7 +332,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
             maxLength={4000}
             error={errors.clientComment}
             hint={form.clientComment ? t.counter(form.clientComment.length) : undefined}
-            testId="request-comment"
+            testId="request-form-comment"
           />
           <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <Button
@@ -340,7 +340,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               variant="contained"
               loading={busy === 'submit'}
               disabled={busy !== null && busy !== 'submit'}
-              data-testid="request-submit"
+              data-testid="request-form-submit"
             >
               {t.submit}
             </Button>
@@ -349,7 +349,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
               onClick={() => void onSave()}
               loading={busy === 'save'}
               disabled={busy !== null && busy !== 'save'}
-              data-testid="request-save"
+              data-testid="request-form-save"
             >
               {t.save}
             </Button>
@@ -358,7 +358,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
                 variant="text"
                 onClick={() => setConfirmDelete(true)}
                 disabled={busy !== null}
-                data-testid="request-delete"
+                data-testid="request-form-delete"
               >
                 {t.delete}
               </Button>
@@ -383,7 +383,7 @@ function RequestForm({ draft }: { draft?: RequestView }) {
             variant="contained"
             loading={busy === 'delete'}
             onClick={() => void onDelete()}
-            data-testid="request-delete-confirm"
+            data-testid="request-form-delete-confirm"
           >
             {t.delete}
           </Button>
@@ -396,7 +396,14 @@ function RequestForm({ draft }: { draft?: RequestView }) {
 /** Боковая панель «Что будет после отправки». */
 function NextSteps() {
   return (
-    <Panel tone="soft" gap={14} px={24} py={24} sx={{ width: 360, flexShrink: 0 }} data-testid="request-next-steps">
+    <Panel
+      tone="soft"
+      gap={14}
+      px={24}
+      py={24}
+      sx={{ width: 360, flexShrink: 0 }}
+      data-testid="request-form-next-steps"
+    >
       <PanelTitle>{t.nextTitle}</PanelTitle>
       {t.nextSteps.map((step, index) => (
         <Box key={step} sx={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>

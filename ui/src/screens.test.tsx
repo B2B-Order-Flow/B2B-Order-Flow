@@ -125,10 +125,10 @@ describe('UI-03. Регистрация компании', () => {
     const user = userEvent.setup();
     renderApp('/company/new');
 
-    await user.type(await screen.findByTestId('company-name'), 'ООО «Фантом»');
-    await user.type(screen.getByTestId('company-inn'), '9977004455');
-    await user.type(screen.getByTestId('company-legal-address'), 'г. Москва, ул. Примерная, д. 1');
-    await user.click(screen.getByTestId('company-submit'));
+    await user.type(await screen.findByTestId('company-new-name'), 'ООО «Фантом»');
+    await user.type(screen.getByTestId('company-new-inn'), '9977004455');
+    await user.type(screen.getByTestId('company-new-legal-address'), 'г. Москва, ул. Примерная, д. 1');
+    await user.click(screen.getByTestId('company-new-submit'));
 
     expect(await screen.findByTestId('company-new-error')).toHaveTextContent(texts.errors.COMPANY_INN_NOT_FOUND!);
     expect(screen.getByText(texts.companyNew.errors.innNotFound)).toBeInTheDocument();
@@ -142,10 +142,10 @@ describe('UI-03. Регистрация компании', () => {
     const user = userEvent.setup();
     renderApp('/company/new');
 
-    await user.type(await screen.findByTestId('company-name'), 'ООО «Опечатка»');
-    await user.type(screen.getByTestId('company-inn'), '9977004456');
-    await user.type(screen.getByTestId('company-legal-address'), 'г. Москва');
-    await user.click(screen.getByTestId('company-submit'));
+    await user.type(await screen.findByTestId('company-new-name'), 'ООО «Опечатка»');
+    await user.type(screen.getByTestId('company-new-inn'), '9977004456');
+    await user.type(screen.getByTestId('company-new-legal-address'), 'г. Москва');
+    await user.click(screen.getByTestId('company-new-submit'));
 
     expect(await screen.findByText(texts.companyNew.errors.inn)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
@@ -176,11 +176,11 @@ describe('UI-05 и UI-07. Заявки клиента', () => {
     const user = userEvent.setup();
     const { router } = renderApp('/requests/new');
 
-    await user.type(await screen.findByTestId('request-address'), 'г. Москва, ул. Садовая, д. 12');
-    await user.type(screen.getByTestId('request-speed'), '100');
-    await user.type(screen.getByTestId('request-date'), '2099-12-15');
-    await user.type(screen.getByTestId('request-contact-phone'), '+7 (900) 000-00-00');
-    await user.click(screen.getByTestId('request-submit'));
+    await user.type(await screen.findByTestId('request-form-address'), 'г. Москва, ул. Садовая, д. 12');
+    await user.type(screen.getByTestId('request-form-speed'), '100');
+    await user.type(screen.getByTestId('request-form-date'), '2099-12-15');
+    await user.type(screen.getByTestId('request-form-contact-phone'), '+7 (900) 000-00-00');
+    await user.click(screen.getByTestId('request-form-submit'));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/requests/r-new'));
     const create = fetchMock.mock.calls.find(
@@ -206,11 +206,11 @@ describe('UI-08. Действия SC-01', () => {
     renderApp('/requests/r-131');
 
     await user.click(await screen.findByTestId('terms-tariff-INDIVIDUAL'));
-    await user.click(screen.getByTestId('terms-submit'));
+    await user.click(screen.getByTestId('action-commercial-terms'));
     expect(await screen.findByText(texts.common.required)).toBeInTheDocument();
 
     await user.type(screen.getByTestId('terms-discount'), '10,5');
-    await user.click(screen.getByTestId('terms-submit'));
+    await user.click(screen.getByTestId('action-commercial-terms'));
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/commercial-terms'))).toBe(true),
     );
@@ -244,10 +244,10 @@ describe('UI-08. Действия SC-01', () => {
     await user.click(await screen.findByTestId('tech-result-option-NONE'));
     await user.selectOptions(screen.getByTestId('tech-reason'), 'OTHER');
     await user.type(screen.getByTestId('tech-comment'), 'Нет кабельной канализации');
-    await user.click(screen.getByTestId('tech-submit'));
+    await user.click(screen.getByTestId('action-tech-result'));
 
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/tech-result'))).toBe(false);
-    await user.click(await screen.findByTestId('tech-none-confirm'));
+    await user.click(await screen.findByTestId('action-tech-result-confirm'));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/tech-result'))).toBe(true));
     const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/tech-result'));
     expect(bodyOf(call![1]!)).toEqual({
@@ -277,7 +277,7 @@ describe('UI-08. Результат ТВ «со стройкой»', () => {
     await user.click(await screen.findByTestId('tech-result-option-WITH_CONSTRUCTION'));
     await user.type(screen.getByTestId('tech-capex'), '350000');
     await user.type(screen.getByTestId('tech-days'), '20');
-    await user.click(screen.getByTestId('tech-submit'));
+    await user.click(screen.getByTestId('action-tech-result'));
 
     expect(await screen.findByTestId('tech-construction-unavailable')).toHaveTextContent(
       texts.techResult.constructionUnavailableTitle,
@@ -314,7 +314,7 @@ describe('UI-12. Мои задачи', () => {
     });
     renderApp('/my-tasks');
 
-    const rows = await screen.findAllByTestId('task-row');
+    const rows = await screen.findAllByTestId(/^my-tasks-row-/);
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByText('REQ-2026-000140')).toBeInTheDocument();
     expect(within(rows[1]!).getByText('REQ-2026-000139')).toBeInTheDocument();
@@ -343,14 +343,16 @@ describe('UI-11. Очередь роли', () => {
     const user = userEvent.setup();
     const { router } = renderApp('/queue');
 
-    const rows = await screen.findAllByTestId('queue-row');
+    const rows = await screen.findAllByTestId(/^queue-row-/);
+    // Строка находится по номеру заявки (ui-requirements.md §11.3)
+    expect(rows[0]).toBe(screen.getByTestId('queue-row-REQ-2026-000125'));
     expect(within(rows[0]!).getByText('REQ-2026-000125')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('по правилам R-02')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('—')).toBeInTheDocument();
     const queueCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/stages?'));
     expect(String(queueCall![0])).toContain('queueRole=TECH_SPECIALIST');
 
-    await user.click(within(rows[1]!).getByTestId('stage-claim'));
+    await user.click(within(rows[1]!).getByTestId('action-claim'));
     await waitFor(() => expect(router.state.location.pathname).toBe('/requests/r-131'));
   });
 });

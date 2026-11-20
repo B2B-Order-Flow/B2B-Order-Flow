@@ -54,7 +54,7 @@ export function MyTasksPage() {
             event.stopPropagation();
             open(s);
           }}
-          data-testid="task-open"
+          data-testid="action-open"
         >
           {t.open}
         </Button>
@@ -92,8 +92,8 @@ export function MyTasksPage() {
           gap={20}
           rowPaddingY={16}
           onRowClick={open}
-          rowTestId="task-row"
-          testId="tasks-table"
+          rowTestId={(s) => `my-tasks-row-${s.requestNumber ?? s.id}`}
+          testId="my-tasks-table"
         />
       )}
     </Page>
