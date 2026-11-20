@@ -18,7 +18,7 @@ export interface Req {
   id: string;
   status: string;
   version: number;
-  managerId?: string;
+  managerId?: string; // клиенту не отдаётся: читать токеном оператора
   commitmentLevel?: number;
   integrationError?: boolean;
   closedAt?: string;
@@ -37,6 +37,9 @@ export async function login(request: APIRequestContext, loginName: string) {
 
 export const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+// Желаемая дата: сегодня + n дней, контракт требует «не раньше сегодняшней»
+const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
 // Каждый тест создаёт свою заявку: тесты не зависят друг от друга
 export async function createDraft(request: APIRequestContext, token: string): Promise<Req> {
   const res = await request.post(url('/requests'), {
@@ -44,7 +47,7 @@ export async function createDraft(request: APIRequestContext, token: string): Pr
     data: {
       address: 'г. Екатеринбург, ул. Ленина, 1',
       requestedSpeedMbps: 100,
-      desiredDate: '2026-12-01',
+      desiredDate: inDays(30),
       contactName: 'Соколов А. В.',
       contactPhone: '+79990000001',
       contractPreference: 'OFFER',
