@@ -567,10 +567,32 @@
 
 ### 11.3. Метки для автотестов
 
-Стабильные `data-testid` ставятся на элементы, по которым ходят сценарии Playwright (П2 недели 2, по договорённости с QA):
+Стабильные `data-testid` ставятся на элементы, по которым ходят сценарии Playwright (П2 недели 2, по договорённости с QA). Перечень ниже совпадает с кодом `ui/`: новая метка сначала добавляется сюда.
+
+**Правила:**
 - формат — `<экран>-<элемент>` в нижнем регистре через дефис: `login-submit`, `request-form-address`, `request-card-status`;
-- кнопки действий в карточке — `action-<операция>`: `action-submit`, `action-claim`, `action-accept-offer`, `action-activate`;
-- строки таблиц — `<экран>-row-<номер заявки>`.
+- кнопки действий — `action-<операция>`, кнопка подтверждения в окне — `action-<операция>-confirm`: `action-claim`, `action-accept-offer`, `action-tech-result-confirm`;
+- строки таблиц — `<экран>-row-<номер заявки>`, например `queue-row-REQ-2026-000125`; у компаний номера заявки нет — `admin-companies-row-<ИНН>`;
+- варианты выбора — `<группа>-<значение>`: `tech-result-option-NONE`, `terms-tariff-INDIVIDUAL`.
+
+| Экран | Метки |
+|---|---|
+| Каркас | `main-menu`, `role-switcher` (несколько ролей) или `active-role` (одна), `user-menu`, `theme-toggle`, `logout`, `company-pending` |
+| Общие состояния | `state-loading`, `state-empty`, `state-error`, `status-badge`, `integration-error`, `sla-indicator`, `sla-indicator-value` (атрибут `data-state`: `ok` / `warn` / `breach` / `paused`) |
+| UI-01 Вход | `login-login`, `login-password`, `login-submit`, `login-error`, `login-expired` |
+| UI-02 Регистрация | `register-login`, `register-password`, `register-password-repeat`, `register-full-name`, `register-email`, `register-submit`, `register-error` |
+| UI-03 Регистрация компании | `company-new`, `company-new-name`, `company-new-inn`, `company-new-kpp`, `company-new-ogrn`, `company-new-legal-address`, `company-new-submit`, `company-new-error`, `company-new-resubmit`, `login-hint`, `company-status` |
+| UI-04 Моя компания | `company-page`, `company-title`, `company-status`, `company-members` |
+| UI-05 Заявки | `requests-page`, `requests-create`, `requests-filter-<all / inWork / action / done>`, `requests-table`, `requests-row-<номер>`, `request-action-hint`, `requests-shown` |
+| UI-06 Подтверждение компаний | `admin-companies`, `admin-companies-row-<ИНН>`, `action-confirm-company`, `action-confirm-company-confirm`, `action-reject-company`, `admin-companies-reject-reason`, `action-reject-company-confirm` |
+| UI-07 Форма заявки | `request-form`, `request-form-address`, `request-form-speed`, `request-form-date`, `request-form-contact-name`, `request-form-contact-phone`, `request-form-contract`, `request-form-comment`, `request-form-submit`, `request-form-save`, `request-form-delete`, `request-form-delete-confirm`, `request-form-error`, `request-form-next-steps` |
+| UI-08 Карточка заявки | `request-card`, `request-card-number`, `request-card-status`, `request-card-title`, `request-card-facts`, `request-card-route`, `route-phase` (атрибут `data-state`), `system-check`, `request-card-history`, `history-entry`, `integration-error-banner`, `external-data`, `stage-sla` |
+| UI-08 Действия | `action-assign-manager`, `assign-manager-select`, `action-recheck-data`, `action-accept-offer`, `action-accept-offer-confirm`; коммерческие условия — `commercial-terms`, `terms-tariff-<STANDARD / INDIVIDUAL>`, `terms-discount`, `terms-contract`, `action-commercial-terms`; результат ТВ — `tech-result`, `tech-result-option-<AVAILABLE / WITH_CONSTRUCTION / NONE>`, `tech-capex`, `tech-days`, `tech-reason`, `tech-comment`, `action-tech-result`, `action-tech-result-confirm`, `tech-construction-unavailable` |
+| UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
+| UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee` |
+| UI-12 Мои задачи | `my-tasks-page`, `my-tasks-table`, `my-tasks-row-<номер>`, `action-open` |
+
+**Следующие действия SC-01** получат метки по тем же правилам, когда появятся экраны: `action-contract-sent`, `action-contract-concluded`, `action-complete` (монтаж выполнен, шаг 8), `action-activate` (шаг 9), `action-act-sent`, `action-act-signed`, `action-close-by-default`.
 
 ## 12. Принятые решения
 

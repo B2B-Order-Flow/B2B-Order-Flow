@@ -186,7 +186,8 @@ export interface RequestView {
 }
 
 export interface RequestListQuery extends PageQuery {
-  status?: RequestStatus;
+  /** Один статус или несколько (ui-requirements.md §6.5: фильтр по нескольким статусам). */
+  status?: RequestStatus | RequestStatus[];
   companyId?: string;
   managerId?: string;
   unassigned?: boolean;
@@ -207,4 +208,140 @@ export interface AuditEntry {
   toStatus?: string;
   comment?: string;
   details?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Неделя 2: этапы, SLA, коммерческие условия, результат ТВ, сотрудники оператора.
+// Сверено с core-api.yaml и external-api.yaml недели 2 (PR #41, #42): StageView, SlaTimerView,
+// SlaView, SlaPauseView, OperatorUserView.
+
+export const STAGE_TYPES = [
+  'TECH_CHECK',
+  'RECHECK_TECH',
+  'LEGAL_APPROVAL',
+  'FINANCE_APPROVAL',
+  'PROCUREMENT_APPROVAL',
+  'MGMT_APPROVAL',
+  'CONTRACT_SIGNING',
+  'CONSTRUCTION',
+  'INSTALLATION',
+  'ACTIVATION',
+  'REMEDIATION',
+  'CLOSING',
+] as const;
+
+export type StageType = (typeof STAGE_TYPES)[number];
+export type StageStatus = 'QUEUED' | 'IN_PROGRESS' | 'DONE' | 'RETURNED' | 'REJECTED' | 'SUPERSEDED' | 'CANCELLED';
+export type TechResult = 'AVAILABLE' | 'WITH_CONSTRUCTION' | 'NONE';
+export type SlaTimerStatus = 'RUNNING' | 'PAUSED' | 'STOPPED';
+/** Вид таймера: срок этапа или контрольный срок заявки. */
+export type SlaTimerKind =
+  'STAGE_SLA' | 'DATA_CHECK' | 'MANAGER_ASSIGNMENT' | 'TECH_RESULT' | 'ACCEPTANCE' | 'CANCEL_RESPONSE';
+/** Закрытый справочник причин паузы (sla.md, 6.1). */
+export type PauseReason =
+  | 'REWORK'
+  | 'AWAIT_CLIENT_SIGNATURE'
+  | 'AWAIT_CLIENT_DATA'
+  | 'NO_ACCESS'
+  | 'CLIENT_RESCHEDULED'
+  | 'CANCEL_REVIEW'
+  | 'RECHECK_TECH';
+
+export interface SlaPauseView {
+  id: string;
+  reasonCode: PauseReason;
+  comment?: string;
+  startedAt: string;
+  endedAt?: string;
+  /** Предельный срок паузы. */
+  limitAt?: string;
+  extendedCount?: number;
+  setBy?: string;
+}
+
+/** Таймер срока. Остаток, календарное время и просрочку считает ядро. */
+export interface SlaTimerView {
+  id: string;
+  kind: SlaTimerKind;
+  /** Только для kind = STAGE_SLA. */
+  stageId?: string;
+  stageType?: StageType;
+  status: SlaTimerStatus;
+  normMinutes?: number;
+  startedAt: string;
+  warnAt?: string;
+  dueAt?: string;
+  escalateAt?: string;
+  /** Израсходованное время без пауз. */
+  elapsedSlaSeconds?: number;
+  remainingSlaSeconds?: number;
+  /** Календарное время с создания таймера, без вычета пауз. */
+  calendarElapsedSeconds?: number;
+  warnedAt?: string;
+  breachedAt?: string;
+  escalationLevel?: number;
+  overdue?: boolean;
+  /** Текущая пауза, если таймер на паузе. */
+  pause?: SlaPauseView;
+}
+
+/** GET /requests/{id}/sla: таймеры этапов, контрольные сроки и журнал пауз. */
+export interface SlaView {
+  requestId: string;
+  timers: SlaTimerView[];
+  pauses: SlaPauseView[];
+}
+
+/**
+ * Этап заявки. Названия компании, адреса и сводки SLA в контракте нет: отдаёт ли их ядро
+ * в StageView, решат Дима и Кирилл до 24.11 — до тех пор интерфейс на них не опирается.
+ */
+export interface StageView {
+  id: string;
+  requestId: string;
+  requestNumber?: string;
+  type: StageType;
+  status: StageStatus;
+  queueRole?: Role;
+  /** Не отдаётся клиенту. */
+  assigneeId?: string;
+  needsReassignment?: boolean;
+  /** ID правил маршрутизации, из-за которых создан этап (R-01 и т. д.). */
+  requiredByRules?: string[];
+  routeVersion?: number;
+  version: number;
+  createdAt: string;
+  takenAt?: string;
+  finishedAt?: string;
+}
+
+export interface StageQueueQuery extends PageQuery {
+  queueRole: Role;
+  status?: StageStatus;
+}
+
+export interface CommercialTermsPayload {
+  tariffType: TariffType;
+  contractType: ContractType;
+  discountPercent?: string;
+  speedMbps?: number;
+  version: number;
+}
+
+export interface TechResultPayload {
+  result: TechResult;
+  capex?: string;
+  constructionDays?: number;
+  reasonCode?: string;
+  comment?: string;
+  version: number;
+}
+
+/** Сотрудник оператора для назначения (GET /users?role=…). Неактивного назначить нельзя. */
+export interface OperatorUserView {
+  id: string;
+  login: string;
+  fullName: string;
+  operatorRoles: Role[];
+  active: boolean;
 }

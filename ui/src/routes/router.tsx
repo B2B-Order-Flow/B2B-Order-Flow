@@ -1,18 +1,28 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { AppLayout } from '../components/layout/AppLayout';
+import { AdminCompaniesPage } from '../pages/AdminCompaniesPage';
+import { CompanyNewPage } from '../pages/CompanyNewPage';
+import { CompanyPage } from '../pages/CompanyPage';
 import { LoginPage } from '../pages/LoginPage';
+import { ManagerQueuePage } from '../pages/ManagerQueuePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { RegisterPage } from '../pages/RegisterPage';
+import { RequestCardPage } from '../pages/request/RequestCardPage';
+import { RequestFormPage } from '../pages/RequestFormPage';
+import { RequestsPage } from '../pages/RequestsPage';
+import { MyTasksPage } from '../pages/stages/MyTasksPage';
+import { QueuePage } from '../pages/stages/QueuePage';
 import { routeAccess } from '../session/roles';
 import { texts } from '../texts/ru';
 import { HomeRedirect, RequireAuth, RoleRoute } from './guards';
 
 const s = texts.screens;
 
-// Адреса экранов — ui-requirements.md §3.4. Заглушки заменяются экранами по мере реализации.
+// Адреса экранов — ui-requirements.md §3.4. Заглушка осталась только у уведомлений (UI-14).
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <PlaceholderPage id="UI-02" title={s.register} /> },
+  { path: '/register', element: <RegisterPage /> },
   {
     element: (
       <RequireAuth>
@@ -25,7 +35,7 @@ export const routes: RouteObject[] = [
         path: 'company/new',
         element: (
           <RoleRoute access={routeAccess.companyNew}>
-            <PlaceholderPage id="UI-03" title={s.companyNew} />
+            <CompanyNewPage />
           </RoleRoute>
         ),
       },
@@ -33,7 +43,7 @@ export const routes: RouteObject[] = [
         path: 'company',
         element: (
           <RoleRoute access={routeAccess.company}>
-            <PlaceholderPage id="UI-04" title={s.company} />
+            <CompanyPage />
           </RoleRoute>
         ),
       },
@@ -41,7 +51,7 @@ export const routes: RouteObject[] = [
         path: 'admin/companies',
         element: (
           <RoleRoute access={routeAccess.adminCompanies}>
-            <PlaceholderPage id="UI-06" title={s.adminCompanies} />
+            <AdminCompaniesPage />
           </RoleRoute>
         ),
       },
@@ -49,7 +59,7 @@ export const routes: RouteObject[] = [
         path: 'requests',
         element: (
           <RoleRoute access={routeAccess.requests}>
-            <PlaceholderPage id="UI-05" title={s.requests} />
+            <RequestsPage />
           </RoleRoute>
         ),
       },
@@ -57,7 +67,7 @@ export const routes: RouteObject[] = [
         path: 'requests/new',
         element: (
           <RoleRoute access={routeAccess.requestForm}>
-            <PlaceholderPage id="UI-07" title={s.requestNew} />
+            <RequestFormPage />
           </RoleRoute>
         ),
       },
@@ -65,7 +75,7 @@ export const routes: RouteObject[] = [
         path: 'requests/:requestId',
         element: (
           <RoleRoute access={routeAccess.requests}>
-            <PlaceholderPage id="UI-08" title={s.requestCard} />
+            <RequestCardPage />
           </RoleRoute>
         ),
       },
@@ -73,7 +83,7 @@ export const routes: RouteObject[] = [
         path: 'requests/:requestId/edit',
         element: (
           <RoleRoute access={routeAccess.requestForm}>
-            <PlaceholderPage id="UI-07" title={s.requestEdit} />
+            <RequestFormPage />
           </RoleRoute>
         ),
       },
@@ -81,7 +91,7 @@ export const routes: RouteObject[] = [
         path: 'manager-queue',
         element: (
           <RoleRoute access={routeAccess.managerQueue}>
-            <PlaceholderPage id="UI-09" title={s.managerQueue} />
+            <ManagerQueuePage />
           </RoleRoute>
         ),
       },
@@ -89,7 +99,7 @@ export const routes: RouteObject[] = [
         path: 'queue',
         element: (
           <RoleRoute access={routeAccess.queue}>
-            <PlaceholderPage id="UI-11" title={s.queue} />
+            <QueuePage />
           </RoleRoute>
         ),
       },
@@ -97,7 +107,7 @@ export const routes: RouteObject[] = [
         path: 'my-tasks',
         element: (
           <RoleRoute access={routeAccess.myTasks}>
-            <PlaceholderPage id="UI-12" title={s.myTasks} />
+            <MyTasksPage />
           </RoleRoute>
         ),
       },
