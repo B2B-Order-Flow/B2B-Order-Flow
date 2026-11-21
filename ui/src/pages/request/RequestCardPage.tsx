@@ -10,6 +10,7 @@ import { CommercialTermsForm } from './CommercialTermsForm';
 import { RequestHeader } from './RequestHeader';
 import { RequestOverview } from './RequestOverview';
 import { TechResultForm } from './TechResultForm';
+import { WorkflowNotice } from './WorkflowActions';
 
 const TECH_STAGES = new Set<StageView['type']>(['TECH_CHECK', 'RECHECK_TECH']);
 
@@ -22,11 +23,11 @@ export function RequestCardPage() {
 
   const query = useQuery({ queryKey: queryKeys.request(requestId), queryFn: () => requestsApi.get(requestId) });
 
-  // Этап техспециалиста по этой заявке — из «Моих задач» (api-contract.md §6.4)
+  // Этап исполнителя по этой заявке — из «Моих задач» (api-contract.md §6.4)
   const myStages = useQuery({
     queryKey: queryKeys.stagesMy,
     queryFn: stagesApi.my,
-    enabled: activeRole === 'TECH_SPECIALIST',
+    enabled: activeRole === 'TECH_SPECIALIST' || activeRole === 'ENGINEER',
   });
 
   if (query.isPending) return <LoadingState />;
@@ -44,7 +45,8 @@ export function RequestCardPage() {
 
   return (
     <Page gap={22} top={28} testId="request-card">
-      <RequestHeader request={request} />
+      <RequestHeader request={request} myStages={myStages.data?.content ?? []} />
+      <WorkflowNotice request={request} />
       {termsMode ? (
         <TermsLayout request={request} />
       ) : techStage ? (

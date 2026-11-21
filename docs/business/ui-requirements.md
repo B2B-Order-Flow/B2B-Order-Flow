@@ -588,11 +588,10 @@
 | UI-07 Форма заявки | `request-form`, `request-form-address`, `request-form-speed`, `request-form-date`, `request-form-contact-name`, `request-form-contact-phone`, `request-form-contract`, `request-form-comment`, `request-form-submit`, `request-form-save`, `request-form-delete`, `request-form-delete-confirm`, `request-form-error`, `request-form-next-steps` |
 | UI-08 Карточка заявки | `request-card`, `request-card-number`, `request-card-status`, `request-card-title`, `request-card-facts`, `request-card-route`, `route-phase` (атрибут `data-state`), `system-check`, `request-card-history`, `history-entry`, `integration-error-banner`, `external-data`, `stage-sla` |
 | UI-08 Действия | `action-assign-manager`, `assign-manager-select`, `action-recheck-data`, `action-accept-offer`, `action-accept-offer-confirm`; коммерческие условия — `commercial-terms`, `terms-tariff-<STANDARD / INDIVIDUAL>`, `terms-discount`, `terms-contract`, `action-commercial-terms`; результат ТВ — `tech-result`, `tech-result-option-<AVAILABLE / WITH_CONSTRUCTION / NONE>`, `tech-capex`, `tech-days`, `tech-reason`, `tech-comment`, `action-tech-result`, `action-tech-result-confirm`, `tech-construction-unavailable` |
+| UI-08 Договор, исполнение, акт | `request-card-workflow-notice`; договор — `action-contract-sent`, `action-contract-concluded`, `contract-number`, `contract-date`, `action-contract-concluded-confirm`; инженер — `action-claim` (следующий этап из очереди), `action-complete` (монтаж выполнен, шаг 8), `action-activate`, `action-activate-confirm` (шаг 9); акт — `action-act-sent`, `action-act-signed`, `action-close-by-default` (шаг 10) |
 | UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
 | UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee` |
 | UI-12 Мои задачи | `my-tasks-page`, `my-tasks-table`, `my-tasks-row-<номер>`, `action-open` |
-
-**Следующие действия SC-01** получат метки по тем же правилам, когда появятся экраны: `action-contract-sent`, `action-contract-concluded`, `action-complete` (монтаж выполнен, шаг 8), `action-activate` (шаг 9), `action-act-sent`, `action-act-signed`, `action-close-by-default`.
 
 ## 12. Принятые решения
 

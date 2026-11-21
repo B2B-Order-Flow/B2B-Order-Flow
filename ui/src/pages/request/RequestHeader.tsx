@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { queryKeys, requestsApi, usersApi } from '../../api/endpoints';
 import { errorMessage } from '../../api/errors';
-import type { RequestView } from '../../api/types';
+import type { RequestView, StageView } from '../../api/types';
 import { BackLink } from '../../components/ui/BackLink';
 import { IntegrationErrorBadge, StatusBadge } from '../../components/StatusBadge';
 import { SelectField } from '../../components/ui/FormField';
@@ -25,12 +25,13 @@ import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
 import { managerLabel, submittedLabel } from './labels';
 import { useRequestAction } from './useRequestAction';
+import { WorkflowActions } from './WorkflowActions';
 
 const t = texts.requestCard;
 const TERMINAL = new Set(['CLOSED', 'REJECTED', 'CANCELLED', 'DRAFT']);
 
 // Шапка карточки: «Все заявки», номер и статус, адрес, сведения и действия активной роли.
-export function RequestHeader({ request }: { request: RequestView }) {
+export function RequestHeader({ request, myStages }: { request: RequestView; myStages: StageView[] }) {
   const { user, activeRole } = useSession();
   const navigate = useNavigate();
   const client = isCompanyRole(activeRole);
@@ -78,6 +79,7 @@ export function RequestHeader({ request }: { request: RequestView }) {
           {t.acceptOffer}
         </Button>
       ) : null}
+      <WorkflowActions request={request} myStages={myStages} />
     </>
   );
 
