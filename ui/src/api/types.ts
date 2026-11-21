@@ -182,6 +182,23 @@ export interface RequestView {
   crmManagerId?: string;
   selectedOfferId?: string;
   offers?: ServiceOfferView[];
+  // Неделя 2: результат ТВ, договор, исполнение, акт (core-api.yaml, RequestView)
+  requestClass?: 'STANDARD' | 'EXTENDED' | 'LARGE';
+  techResult?: TechResult;
+  techRejectReasonCode?: string;
+  techRejectReason?: string;
+  capex?: string;
+  constructionDays?: number;
+  contractNumber?: string;
+  contractSentAt?: string;
+  contractConcludedAt?: string;
+  workStartedAt?: string;
+  activatedAt?: string;
+  actSentAt?: string;
+  closedAt?: string;
+  acceptedByDefault?: boolean;
+  /** Маршрут текущей версии в порядке этапов; клиенту — без исполнителей. */
+  stages?: StageView[];
   warnings?: Warning[];
 }
 
@@ -325,6 +342,13 @@ export interface CommercialTermsPayload {
   contractType: ContractType;
   discountPercent?: string;
   speedMbps?: number;
+  version: number;
+}
+
+export interface ContractConcludedPayload {
+  contractNumber: string;
+  /** Дата подписания YYYY-MM-DD, не позже сегодняшней. */
+  concludedAt: string;
   version: number;
 }
 

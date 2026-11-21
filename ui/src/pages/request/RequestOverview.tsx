@@ -61,6 +61,7 @@ export function RequestOverview({ request }: { request: RequestView }) {
             <KeyValueGrid
               items={[
                 { label: t.contract, value: contractLabel(request) },
+                ...(request.contractNumber ? [{ label: t.contractNumber, value: request.contractNumber }] : []),
                 { label: t.contact, value: request.contactName ?? '—' },
                 { label: t.phone, value: request.contactPhone ?? '—' },
                 ...(request.clientComment ? [{ label: t.comment, value: request.clientComment }] : []),

@@ -55,3 +55,9 @@ export function formatShortDateTime(iso: string | undefined | null): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? EMPTY : shortDateTimeFormat.format(date).replace(',', '');
 }
+
+/** Сегодня в локальном времени, `YYYY-MM-DD` — для полей даты. */
+export function todayIso(now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}

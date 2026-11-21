@@ -6,6 +6,7 @@ import type {
   CompanyDecisionRequest,
   CompanyStatus,
   CompanyView,
+  ContractConcludedPayload,
   LoginRequest,
   LoginResponse,
   Page,
@@ -67,6 +68,16 @@ export const requestsApi = {
     api.post<RequestView>(`/requests/${requestId}/commercial-terms`, { body }),
   acceptOffer: (requestId: string, version: number) =>
     api.post<RequestView>(`/requests/${requestId}/contract/accept-offer`, { body: { version } }),
+  contractSent: (requestId: string, version: number) =>
+    api.post<RequestView>(`/requests/${requestId}/contract/sent`, { body: { version } }),
+  contractConcluded: (requestId: string, body: ContractConcludedPayload) =>
+    api.post<RequestView>(`/requests/${requestId}/contract/concluded`, { body }),
+  actSent: (requestId: string, version: number) =>
+    api.post<RequestView>(`/requests/${requestId}/act/sent`, { body: { version } }),
+  actSigned: (requestId: string, version: number) =>
+    api.post<RequestView>(`/requests/${requestId}/act/signed`, { body: { version } }),
+  closeByDefault: (requestId: string, version: number) =>
+    api.post<RequestView>(`/requests/${requestId}/close-by-default`, { body: { version } }),
   /** Таймеры этапов и контрольные сроки (оператору; клиенту SLA не отдаётся). */
   sla: (requestId: string) => api.get<SlaView>(`/requests/${requestId}/sla`),
 };
@@ -80,6 +91,10 @@ export const stagesApi = {
     api.post<StageView>(`/stages/${stageId}/assign`, { body: { assigneeId, version } }),
   techResult: (stageId: string, body: TechResultPayload) =>
     api.post<StageView>(`/stages/${stageId}/tech-result`, { body }),
+  complete: (stageId: string, version: number) =>
+    api.post<StageView>(`/stages/${stageId}/complete`, { body: { version } }),
+  activate: (stageId: string, version: number) =>
+    api.post<StageView>(`/stages/${stageId}/activate`, { body: { version } }),
 };
 
 // Сотрудники оператора с ролью — для назначения менеджера и исполнителя (api-contract.md §6.1).
