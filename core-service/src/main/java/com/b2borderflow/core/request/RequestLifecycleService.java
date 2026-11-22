@@ -132,7 +132,7 @@ public class RequestLifecycleService {
         requestRepository.saveAndFlush(request);
 
         stageService.createStage(request, RequestStageType.TECH_CHECK, Role.TECH_SPECIALIST,
-                null, RequestStageStatus.QUEUED, route.requiredByRules());
+                null, RequestStageStatus.QUEUED, List.of());
 
         Map<String, Object> details = new HashMap<>();
         details.put("tariffType", tariffType.name());

@@ -450,12 +450,14 @@ public class StageService {
 
         String previousStatus = request.getStatus().name();
         request.setTechResult(com.b2borderflow.core.request.TechResult.AVAILABLE.name());
-        request.setRouteVersion(request.getRouteVersion() + 1);
         request.setRequestClass(finalRoute.requestClass().name());
         request.setStatus(RequestStatus.CONTRACT_SIGNING);
         request.setStatusChangedAt(now);
         requestRepository.saveAndFlush(request);
 
+        // Результат ТВ получен: контрольный срок ТВ остановлен. Окончательный
+        // маршрут — не пересборка, поэтому route_version не растёт (routing-rules.md, 6.1).
+        slaTimerService.stopControlTimer(request.getId(), com.b2borderflow.core.sla.SlaTimerKind.TECH_RESULT);
         finishStage(stage, RequestStageStatus.DONE, now);
         createStage(request, RequestStageType.CONTRACT_SIGNING, null,
                 request.getManagerId(), RequestStageStatus.IN_PROGRESS, finalRoute.requiredByRules());

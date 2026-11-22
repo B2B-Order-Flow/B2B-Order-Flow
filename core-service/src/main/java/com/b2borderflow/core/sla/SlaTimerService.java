@@ -28,6 +28,8 @@ public class SlaTimerService {
 
     private static final Duration PROD_PAUSE_LIMIT = Duration.ofHours(80);
     private static final Duration DEMO_PAUSE_LIMIT = Duration.ofMinutes(4);
+    private static final Duration PROD_PAUSE_WARNING_BEFORE = Duration.ofHours(16);
+    private static final Duration DEMO_PAUSE_WARNING_BEFORE = Duration.ofMinutes(1);
     private static final Collection<SlaTimerStatus> ACTIVE = EnumSet.of(
             SlaTimerStatus.RUNNING, SlaTimerStatus.PAUSED);
 
@@ -117,14 +119,21 @@ public class SlaTimerService {
         OffsetDateTime now = now();
         SlaCalendar calendar = calendarFor(timer);
         long elapsed = timer.getElapsedSlaSeconds()
-                + SlaTime.workingTimeBetween(timer.getStartedAt(), now, calendar).toSeconds();
+                + SlaTime.workingTimeBetween(elapsedAnchor(timer), now, calendar).toSeconds();
         timer.setElapsedSlaSeconds(elapsed);
         timer.setStatus(SlaTimerStatus.PAUSED);
 
         OffsetDateTime pauseLimit = limitAt != null
                 ? limitAt
                 : SlaTime.addWorkingTime(now, pauseLimit(), calendar);
-        timer.setNextEventAt(pauseLimit);
+        // Планировщик просыпается и за 2 рабочих дня до предела, и в сам предел (sla.md, 5.2).
+        Duration untilLimit = SlaTime.workingTimeBetween(now, pauseLimit, calendar);
+        Duration warningBefore = pauseWarningBefore();
+        Duration untilWarning = untilLimit.compareTo(warningBefore) > 0
+                ? untilLimit.minus(warningBefore)
+                : Duration.ZERO;
+        OffsetDateTime warnAt = SlaTime.addWorkingTime(now, untilWarning, calendar);
+        timer.setNextEventAt(earliest(warnAt, pauseLimit));
         timerRepository.saveAndFlush(timer);
 
         SlaPause pause = new SlaPause();
@@ -188,7 +197,7 @@ public class SlaTimerService {
         if (timer.getStatus() == SlaTimerStatus.RUNNING) {
             SlaCalendar calendar = calendarFor(timer);
             long elapsed = timer.getElapsedSlaSeconds()
-                    + SlaTime.workingTimeBetween(timer.getStartedAt(), now, calendar).toSeconds();
+                    + SlaTime.workingTimeBetween(elapsedAnchor(timer), now, calendar).toSeconds();
             timer.setElapsedSlaSeconds(elapsed);
         }
         endActivePause(timer);
@@ -197,7 +206,31 @@ public class SlaTimerService {
         timerRepository.save(timer);
     }
 
-    private SlaCalendar calendarFor(SlaTimer timer) {
+    /**
+     * Точка отсчёта для накопления SLA. После первой паузы это {@code ended_at}
+     * последней завершённой паузы, иначе {@code started_at}: иначе время до паузы
+     * посчиталось бы ещё раз вместе с паузой.
+     */
+    public OffsetDateTime elapsedAnchor(SlaTimer timer) {
+        return pauseRepository.findFirstByTimerIdAndEndedAtIsNotNullOrderByEndedAtDesc(timer.getId())
+                .map(SlaPause::getEndedAt)
+                .orElse(timer.getStartedAt());
+    }
+
+    /** Израсходованное рабочее время с учётом уже накопленного и текущего интервала. */
+    public long elapsedSlaSeconds(SlaTimer timer, OffsetDateTime at) {
+        if (timer.getStatus() != SlaTimerStatus.RUNNING) {
+            return timer.getElapsedSlaSeconds();
+        }
+        return timer.getElapsedSlaSeconds()
+                + SlaTime.workingTimeBetween(elapsedAnchor(timer), at, calendarFor(timer)).toSeconds();
+    }
+
+    public Optional<SlaPause> activePause(UUID timerId) {
+        return pauseRepository.findFirstByTimerIdAndEndedAtIsNullOrderByStartedAtDesc(timerId);
+    }
+
+    public SlaCalendar calendarFor(SlaTimer timer) {
         SlaNorm norm = timer.getStageId() == null
                 ? controlNorm(timer.getKind())
                 : stageNorm(stageRepository.findById(timer.getStageId())
@@ -223,6 +256,12 @@ public class SlaTimerService {
 
     private Duration pauseLimit() {
         return properties.getProfile() == SlaProfile.DEMO ? DEMO_PAUSE_LIMIT : PROD_PAUSE_LIMIT;
+    }
+
+    private Duration pauseWarningBefore() {
+        return properties.getProfile() == SlaProfile.DEMO
+                ? DEMO_PAUSE_WARNING_BEFORE
+                : PROD_PAUSE_WARNING_BEFORE;
     }
 
     private String reasonTitle(PauseReasonCode code) {
