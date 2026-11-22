@@ -2397,6 +2397,10 @@ components:
         requestId:
           type: string
           format: uuid
+        requestNumber:
+          type: string
+          example: REQ-2026-000123
+          description: Номер заявки; нет для уведомлений компании без заявки
         payload:
           type: object
           description: |

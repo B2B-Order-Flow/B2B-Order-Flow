@@ -29,6 +29,12 @@ class NotificationsIntegrationTest extends WeekTwoApiSupport {
                 .orElseThrow();
         UUID notificationId = UUID.fromString((String) own.get("id"));
         assertThat(own.get("readAt")).isNull();
+        assertThat(own.get("requestNumber")).isEqualTo(
+                jdbc.queryForObject("select number from request where id = ?",
+                        String.class, flow.requestId()));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) own.get("payload");
+        assertThat(payload.get("status")).isEqualTo("TECH_CHECK");
 
         ApiResponse read = request(org.springframework.http.HttpMethod.POST,
                 "/internal/v1/notifications/" + notificationId + "/read",

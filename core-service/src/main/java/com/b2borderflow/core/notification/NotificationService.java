@@ -10,6 +10,7 @@ import com.b2borderflow.core.domain.Role;
 import com.b2borderflow.core.error.ApiException;
 import com.b2borderflow.core.error.Violation;
 import com.b2borderflow.core.request.Request;
+import com.b2borderflow.core.request.RequestRepository;
 import com.b2borderflow.core.request.RequestStage;
 import com.b2borderflow.core.security.CurrentUser;
 import com.b2borderflow.core.security.CurrentUserProvider;
@@ -41,6 +42,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final OperatorRoleRepository operatorRoleRepository;
     private final AppUserRepository userRepository;
+    private final RequestRepository requestRepository;
     private final EventStreamService eventStreamService;
     private final CurrentUserProvider currentUserProvider;
     private final Clock clock;
@@ -48,12 +50,14 @@ public class NotificationService {
     public NotificationService(NotificationRepository notificationRepository,
                                OperatorRoleRepository operatorRoleRepository,
                                AppUserRepository userRepository,
+                               RequestRepository requestRepository,
                                EventStreamService eventStreamService,
                                CurrentUserProvider currentUserProvider,
                                Clock clock) {
         this.notificationRepository = notificationRepository;
         this.operatorRoleRepository = operatorRoleRepository;
         this.userRepository = userRepository;
+        this.requestRepository = requestRepository;
         this.eventStreamService = eventStreamService;
         this.currentUserProvider = currentUserProvider;
         this.clock = clock;
@@ -215,8 +219,18 @@ public class NotificationService {
                         actor.id(), pageable)
                 : notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(actor.id(), pageable);
 
+        List<UUID> requestIds = result.getContent().stream()
+                .map(Notification::getRequestId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, String> requestNumbers = requestIds.isEmpty()
+                ? Map.of()
+                : requestRepository.findAllById(requestIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(Request::getId, Request::getNumber));
+
         List<NotificationView> content = result.getContent().stream()
-                .map(this::toView)
+                .map(notification -> toView(notification, requestNumbers.get(notification.getRequestId())))
                 .toList();
         return new NotificationPage()
                 .content(content)
@@ -244,7 +258,7 @@ public class NotificationService {
         return notificationRepository.markAllRead(currentUserProvider.current().id(), OffsetDateTime.now(clock));
     }
 
-    private NotificationView toView(Notification notification) {
+    private NotificationView toView(Notification notification, String requestNumber) {
         NotificationEventType eventType;
         try {
             eventType = NotificationEventType.fromValue(notification.getEventType());
@@ -255,6 +269,7 @@ public class NotificationService {
                 .id(notification.getId())
                 .eventType(eventType)
                 .requestId(notification.getRequestId())
+                .requestNumber(requestNumber)
                 .payload(notification.getPayload() == null ? Map.of() : notification.getPayload())
                 .createdAt(notification.getCreatedAt())
                 .readAt(notification.getReadAt())
