@@ -117,7 +117,7 @@ public class RequestSlaService {
                 ? 0
                 : Math.max(0, Duration.between(timer.getCreatedAt(), now).toSeconds());
         boolean overdue = timer.getBreachedAt() != null
-                || (timer.getStatus() != SlaTimerStatus.STOPPED
+                || (timer.getStatus() == SlaTimerStatus.RUNNING
                         && timer.getDueAt() != null
                         && now.isAfter(timer.getDueAt()));
 
