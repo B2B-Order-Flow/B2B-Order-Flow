@@ -166,6 +166,61 @@ describe('UI-14. Экран уведомлений', () => {
     expect(screen.getByTestId('action-read-all')).toBeDisabled();
   });
 
+  describe('запрос счётчика упал, а список загрузился', () => {
+    function apiWithoutCounter() {
+      sessionStore.setToken('jwt', 28800);
+      sessionStore.setActiveRole('SALES_MANAGER');
+      let items = [note({ id: 'n-1' }), note({ id: 'n-2', readAt: '2026-11-22T09:30:00Z' })];
+      const fetchMock = mockApi({
+        'GET /me': () => jsonResponse(200, manager),
+        'GET /requests': () => jsonResponse(200, pageOf([])),
+        'GET /requests/r-1': () => jsonResponse(200, request),
+        'GET /notifications': (url) =>
+          url.searchParams.get('unread') === 'true'
+            ? jsonResponse(503, { code: 'SERVICE_UNAVAILABLE', retryable: true })
+            : jsonResponse(200, pageOf(items)),
+        'POST /notifications/read-all': () => {
+          items = items.map((item) => ({ ...item, readAt: item.readAt ?? '2026-11-22T10:00:00Z' }));
+          return new Response(null, { status: 204 });
+        },
+      });
+      return fetchMock;
+    }
+
+    it('на экране кнопка активна, пока в списке есть непрочитанные', async () => {
+      const fetchMock = apiWithoutCounter();
+      const user = userEvent.setup();
+      renderApp('/notifications');
+
+      await screen.findByTestId('notifications-row-n-1');
+      expect(screen.queryByTestId('notifications-badge')).not.toBeInTheDocument();
+      const button = screen.getByTestId('action-read-all');
+      expect(button).toBeEnabled();
+      await user.click(button);
+
+      await waitFor(() => expect(screen.getByTestId('notifications-row-n-1')).toHaveAttribute('data-state', 'read'));
+      expect(posted(fetchMock, '/notifications/read-all')).toHaveLength(1);
+      await waitFor(() => expect(screen.getByTestId('action-read-all')).toBeDisabled());
+    });
+
+    it('в выпадающем списке кнопка видна и работает', async () => {
+      const fetchMock = apiWithoutCounter();
+      const user = userEvent.setup();
+      renderApp('/requests');
+
+      await user.click(await screen.findByTestId('notifications-bell'));
+      const popover = await screen.findByTestId('notifications-popover');
+      await within(popover).findByTestId('notifications-menu-row-n-1');
+      await user.click(within(popover).getByTestId('action-read-all'));
+
+      await waitFor(() =>
+        expect(within(popover).getByTestId('notifications-menu-row-n-1')).toHaveAttribute('data-state', 'read'),
+      );
+      expect(posted(fetchMock, '/notifications/read-all')).toHaveLength(1);
+      await waitFor(() => expect(within(popover).queryByTestId('action-read-all')).not.toBeInTheDocument());
+    });
+  });
+
   it('пустой список: «Новых уведомлений нет», отмечать нечего', async () => {
     api([]);
     renderApp('/notifications');

@@ -32,6 +32,11 @@ export function notificationText(item: NotificationView, reader: NotificationRea
   });
 }
 
+/** Есть что отмечать: по счётчику или по уже загруженному списку, если запрос счётчика не удался. */
+export function canReadAll(unreadCount: number, items: NotificationView[] = []): boolean {
+  return unreadCount > 0 || items.some((item) => !item.readAt);
+}
+
 /** Куда ведёт клик (notifications.md, разделы 4 и 4.6). У экспорта экрана пока нет. */
 export function notificationTarget(item: NotificationView): string | null {
   if (item.requestId) return `/requests/${item.requestId}`;

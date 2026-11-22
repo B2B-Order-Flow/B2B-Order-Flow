@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router';
 import { notificationsApi, queryKeys } from '../../api/endpoints';
+import { canReadAll } from '../../lib/notifications';
 import { canAccess, routeAccess } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
@@ -92,7 +93,7 @@ function LatestNotifications({ count, onClose }: { count: number; onClose: () =>
         <Typography variant="subtitle1" component="h2">
           {texts.screens.notifications}
         </Typography>
-        {count > 0 ? (
+        {canReadAll(count, query.data?.content) ? (
           <Button
             variant="text"
             sx={{ height: 32, px: '8px' }}

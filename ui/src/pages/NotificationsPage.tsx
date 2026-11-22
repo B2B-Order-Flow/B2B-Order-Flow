@@ -8,6 +8,7 @@ import { NotificationList } from '../components/notifications/NotificationList';
 import { useReadAllNotifications, useUnreadCount } from '../components/notifications/useNotifications';
 import { EmptyState, ErrorState, LoadingState } from '../components/states';
 import { Muted, Page, PageTitle, Panel } from '../components/ui/Panel';
+import { canReadAll } from '../lib/notifications';
 import { texts } from '../texts/ru';
 import { c } from '../theme/tokens';
 
@@ -33,7 +34,7 @@ export function NotificationsPage() {
         <PageTitle>{texts.screens.notifications}</PageTitle>
         <Button
           variant="outlined"
-          disabled={unread === 0}
+          disabled={!canReadAll(unread, data?.content)}
           loading={readAll.isPending}
           onClick={() => readAll.mutate()}
           data-testid="action-read-all"
