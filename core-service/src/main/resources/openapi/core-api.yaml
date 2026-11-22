@@ -2397,11 +2397,16 @@ components:
         requestId:
           type: string
           format: uuid
+        requestNumber:
+          type: string
+          example: REQ-2026-000123
+          description: Номер заявки; нет для уведомлений компании без заявки
         payload:
           type: object
           description: |
             Данные для подписи без запроса к серверу: `stageId`, `stageType`, `minutesLeft`,
-            `deadlineKind`, `companyId`, `exportId` (docs/system/notifications.md, 5).
+            `deadlineKind`, `companyId`, `exportId`, `status`, `reasonCode`
+            (docs/system/notifications.md, 5).
           additionalProperties: true
         createdAt:
           type: string

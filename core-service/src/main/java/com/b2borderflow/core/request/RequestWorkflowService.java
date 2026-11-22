@@ -14,6 +14,8 @@ import com.b2borderflow.core.error.ErrorCode;
 import com.b2borderflow.core.error.Violation;
 import com.b2borderflow.core.integration.ExternalCallResult;
 import com.b2borderflow.core.integration.ExternalPayload;
+import com.b2borderflow.core.notification.NotificationEvent;
+import com.b2borderflow.core.notification.NotificationService;
 import com.b2borderflow.core.security.CurrentUser;
 import com.b2borderflow.core.security.CurrentUserProvider;
 import com.b2borderflow.core.sla.SlaTimerKind;
@@ -62,6 +64,7 @@ public class RequestWorkflowService {
     private final RequestViewFactory viewFactory;
     private final CurrentUserProvider currentUserProvider;
     private final AuditService auditService;
+    private final NotificationService notificationService;
     private final SlaTimerService slaTimerService;
     private final Clock clock;
 
@@ -76,6 +79,7 @@ public class RequestWorkflowService {
                                   RequestViewFactory viewFactory,
                                   CurrentUserProvider currentUserProvider,
                                   AuditService auditService,
+                                  NotificationService notificationService,
                                   SlaTimerService slaTimerService,
                                   Clock clock) {
         this.requestRepository = requestRepository;
@@ -89,6 +93,7 @@ public class RequestWorkflowService {
         this.viewFactory = viewFactory;
         this.currentUserProvider = currentUserProvider;
         this.auditService = auditService;
+        this.notificationService = notificationService;
         this.slaTimerService = slaTimerService;
         this.clock = clock;
     }
@@ -142,6 +147,7 @@ public class RequestWorkflowService {
         auditService.record(actor, request.getCompanyId(), request.getId(), AuditAction.REQUEST_SUBMITTED,
                 "REQUEST", request.getId(), RequestStatus.DRAFT.name(), RequestStatus.DATA_CHECK.name(),
                 null, details);
+        notificationService.notifyAuthor(request, NotificationEvent.REQUEST_SUBMITTED, Map.of());
 
         return new SubmissionStart(request.getId(), request.getCompanyId(), company.getInn());
     }
@@ -223,6 +229,8 @@ public class RequestWorkflowService {
                         AuditAction.REQUEST_MANAGER_ASSIGNED,
                         "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.WITH_MANAGER.name(),
                         null, details);
+                notificationService.notifyUsers(notificationService.authorAndManager(request), request,
+                        NotificationEvent.REQUEST_ASSIGNED, Map.of());
             }
         } else {
             applyExternalData(request, data);
@@ -237,6 +245,7 @@ public class RequestWorkflowService {
                     AuditAction.REQUEST_DATA_CHECK_FAILED,
                     "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.DATA_CHECK.name(),
                     null, details);
+            notificationService.notifyCoordinators(request, NotificationEvent.INTEGRATION_ERROR, Map.of());
             warnings = List.of(RequestViewFactory.integrationWarning());
         }
 
@@ -287,6 +296,8 @@ public class RequestWorkflowService {
         auditService.record(actor, saved.getCompanyId(), saved.getId(), AuditAction.REQUEST_MANAGER_CLAIMED,
                 "REQUEST", saved.getId(), RequestStatus.DATA_CHECK.name(), RequestStatus.WITH_MANAGER.name(),
                 null, details);
+        notificationService.notifyUsers(notificationService.authorAndManager(saved), saved,
+                NotificationEvent.REQUEST_ASSIGNED, Map.of());
 
         return viewFactory.toView(saved, actor, List.of());
     }
@@ -347,6 +358,10 @@ public class RequestWorkflowService {
         details.put("previousManagerId", previousManagerId);
         auditService.record(actor, saved.getCompanyId(), saved.getId(), action,
                 "REQUEST", saved.getId(), previousStatus, newStatus, null, details);
+        if (action == AuditAction.REQUEST_MANAGER_ASSIGNED) {
+            notificationService.notifyUsers(notificationService.authorAndManager(saved), saved,
+                    NotificationEvent.REQUEST_ASSIGNED, Map.of());
+        }
 
         return viewFactory.toView(saved, actor, List.of());
     }
