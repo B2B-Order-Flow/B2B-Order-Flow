@@ -8,6 +8,7 @@ import type {
   RequestStatus,
   Role,
   StageType,
+  StageStatus,
   TariffType,
 } from '../api/types';
 
@@ -287,14 +288,15 @@ export const texts = {
     },
     answered: (count: number, total: number) => `ответили ${count} из ${total} систем`,
     route: 'Путь заявки',
-    phaseNow: 'сейчас',
-    phases: [
-      { name: 'Проверка данных', hint: 'справочник клиентов, биллинг и CRM' },
-      { name: 'Назначение менеджера', hint: 'после получения данных CRM' },
-      { name: 'Коммерческие условия', hint: 'менеджер фиксирует тариф и договор' },
-      { name: 'Проверка технической возможности', hint: 'технический специалист' },
-      { name: 'Договор, монтаж, активация, закрытие', hint: 'по маршруту заявки' },
-    ],
+    routeEmpty: 'Этапы появятся, когда менеджер отправит заявку в работу',
+    routeNoStages: 'Этапы маршрута не создавались',
+    routeMore: 'Следующие этапы появятся по мере прохождения заявки',
+    stageAssignee: (name: string) => `Исполнитель: ${name}`,
+    stageYou: 'вы',
+    stageAssigned: 'назначен',
+    stageUnassigned: 'Исполнитель не назначен',
+    stageReassign: 'Исполнитель недоступен, нужно переназначить',
+    stageRules: (rules: string) => `Правила маршрутизации: ${rules}`,
     history: 'Что происходило',
     historyDraft: 'Заявка ещё не отправлена оператору',
     historyEmpty: 'Записей пока нет',
@@ -477,6 +479,16 @@ export const texts = {
     REMEDIATION: 'Устранение замечаний',
     CLOSING: 'Закрытие',
   } satisfies Record<StageType, string>,
+
+  stageStatus: {
+    QUEUED: 'В очереди',
+    IN_PROGRESS: 'В работе',
+    DONE: 'Завершён',
+    RETURNED: 'Возвращён на доработку',
+    REJECTED: 'Отклонён',
+    SUPERSEDED: 'Заменён новой версией',
+    CANCELLED: 'Отменён',
+  } satisfies Record<StageStatus, string>,
 
   notFound: {
     title: 'Страница не найдена',

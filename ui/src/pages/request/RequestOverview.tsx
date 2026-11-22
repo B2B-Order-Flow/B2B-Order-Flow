@@ -1,4 +1,3 @@
-import CheckIcon from '@mui/icons-material/Check';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
@@ -6,7 +5,7 @@ import Typography from '@mui/material/Typography';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { queryKeys, requestsApi } from '../../api/endpoints';
-import type { RequestStatus, RequestView } from '../../api/types';
+import type { RequestView } from '../../api/types';
 import { ErrorState, LoadingState } from '../../components/states';
 import { Notice } from '../../components/ui/Notice';
 import { Columns, KeyValueGrid, Panel, PanelTitle } from '../../components/ui/Panel';
@@ -15,7 +14,8 @@ import { contractTypeOf } from '../../lib/requestView';
 import { isCompanyRole } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
-import { c, radius, type ColorToken } from '../../theme/tokens';
+import { c, radius } from '../../theme/tokens';
+import { RouteStages } from './RouteStages';
 import { actionLabel, actorLabel, dateAt, speedLabel } from './labels';
 
 const t = texts.requestCard;
@@ -151,47 +151,13 @@ function answeredLabel(request: RequestView): string {
   return t.answered(checks.filter((check) => check.answered).length, checks.length);
 }
 
-// Путь заявки: фазы процесса (business-process.md) и где заявка сейчас. Фактический маршрут
-// с этапами — GET /requests/{id}/route, его в контракте пока нет; правила маршрута здесь не считаются.
-type PhaseState = 'done' | 'current' | 'future' | 'stopped';
-
-function currentPhase(status: RequestStatus, request: RequestView): number {
-  switch (status) {
-    case 'DRAFT':
-      return -1;
-    case 'DATA_CHECK':
-      return request.integrationError || request.segment === undefined ? 0 : 1;
-    case 'WITH_MANAGER':
-    case 'REWORK':
-      return 2;
-    case 'TECH_CHECK':
-      return 3;
-    case 'CLOSED':
-      return t.phases.length;
-    case 'REJECTED':
-    case 'CANCELLED':
-      return request.previousStatus ? currentPhase(request.previousStatus, request) : 0;
-    default:
-      return 4;
-  }
-}
-
+// Путь заявки: проверка данных и фактические этапы маршрута (RequestView.stages).
 function RoutePanel({ request, client }: { request: RequestView; client: boolean }) {
-  const current = currentPhase(request.status, request);
-  const stopped = request.status === 'REJECTED' || request.status === 'CANCELLED';
-  const stateOf = (index: number): PhaseState =>
-    index < current ? 'done' : index === current ? (stopped ? 'stopped' : 'current') : 'future';
-
   return (
     <Panel gap={14} sx={{ flex: 1 }} data-testid="request-card-route">
       <PanelTitle>{t.route}</PanelTitle>
-      {t.phases.map((phase, index) =>
-        index === 0 && request.status === 'DATA_CHECK' && !client ? (
-          <ChecksBlock key={phase.name} request={request} />
-        ) : (
-          <PhaseRow key={phase.name} name={phase.name} hint={phase.hint} state={stateOf(index)} />
-        ),
-      )}
+      {request.status === 'DATA_CHECK' && !client ? <ChecksBlock request={request} /> : null}
+      <RouteStages request={request} client={client} />
     </Panel>
   );
 }
@@ -226,49 +192,6 @@ function ChecksBlock({ request }: { request: RequestView }) {
         </Box>
       ))}
     </Stack>
-  );
-}
-
-const RING: Record<PhaseState, ColorToken> = {
-  done: 'sla-ok-bar',
-  current: 'action-primary',
-  future: 'border-strong',
-  stopped: 'sla-breach-bar',
-};
-
-function PhaseRow({ name, hint, state }: { name: string; hint: string; state: PhaseState }) {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }} data-testid="route-phase" data-state={state}>
-      <Box
-        aria-hidden
-        sx={{
-          width: 18,
-          height: 18,
-          flexShrink: 0,
-          borderRadius: '50%',
-          border: `2px solid ${c(RING[state])}`,
-          bgcolor: state === 'done' ? c('sla-ok-bar') : 'transparent',
-          display: 'grid',
-          placeItems: 'center',
-        }}
-      >
-        {state === 'done' ? <CheckIcon sx={{ fontSize: 12, color: c('bg-surface') }} /> : null}
-        {state === 'current' ? (
-          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c('action-primary') }} />
-        ) : null}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="subtitle1" sx={{ color: c(state === 'future' ? 'text-secondary' : 'text-primary') }}>
-          {name}
-          {state === 'current' ? (
-            <Box component="span" sx={{ color: c('action-primary-text') }}>{` · ${t.phaseNow}`}</Box>
-          ) : null}
-        </Typography>
-        <Typography variant="caption" component="div" sx={{ color: c('text-muted') }}>
-          {hint}
-        </Typography>
-      </Box>
-    </Box>
   );
 }
 
