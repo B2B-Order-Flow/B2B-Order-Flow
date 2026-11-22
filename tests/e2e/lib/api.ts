@@ -40,8 +40,16 @@ export const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 // Желаемая дата: сегодня + n дней, контракт требует «не раньше сегодняшней»
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 
+type DraftOptions = {
+  address?: string;
+  requestedSpeedMbps?: number;
+  contactName?: string;
+  contractPreference?: 'OFFER' | 'STANDARD' | 'CLIENT_FORM';
+  clientComment?: string;
+};
+
 // Каждый тест создаёт свою заявку: тесты не зависят друг от друга
-export async function createDraft(request: APIRequestContext, token: string): Promise<Req> {
+export async function createDraft(request: APIRequestContext, token: string, options: DraftOptions = {}): Promise<Req> {
   const res = await request.post(url('/requests'), {
     headers: { ...auth(token), 'Idempotency-Key': randomUUID() },
     data: {
@@ -51,6 +59,7 @@ export async function createDraft(request: APIRequestContext, token: string): Pr
       contactName: 'Соколов А. В.',
       contactPhone: '+79990000001',
       contractPreference: 'OFFER',
+      ...options,
     },
   });
   if (res.status() !== 201) throw new Error(`Создание черновика: ${res.status()}`);
