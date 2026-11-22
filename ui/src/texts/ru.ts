@@ -4,12 +4,41 @@
 import type {
   CompanyStatus,
   ContractType,
+  NotificationEventType,
   PauseReason,
   RequestStatus,
   Role,
   StageType,
   TariffType,
 } from '../api/types';
+
+/** Данные для текста уведомления: n и s — номер заявки и этап с ведущим пробелом или пустая строка. */
+interface NotificationTextContext {
+  n: string;
+  s: string;
+  left: string;
+  kind?: string;
+  client: boolean;
+  coordinator: boolean;
+}
+
+function deadlineText(n: string, kind: string | undefined, breached: boolean): string {
+  const term = breached ? 'срок истёк' : 'срок скоро истекает';
+  switch (kind) {
+    case 'DATA_CHECK':
+      return `Заявка${n}: проверка данных не завершена (${term}). Проверьте ошибку интеграции и запустите повторную проверку`;
+    case 'MANAGER_ASSIGNMENT':
+      return `Заявка${n}: менеджер не назначен (${term}). Назначьте менеджера`;
+    case 'TECH_RESULT':
+      return `Заявка${n}: нет результата ТВ (${term}). Выясните причину задержки`;
+    case 'ACCEPTANCE':
+      return `Заявка${n}: срок приёмки истёк, можно закрыть «Принято по умолчанию»`;
+    case 'CANCEL_RESPONSE':
+      return `Заявка${n}: срок ответа на запрос об отмене ${breached ? 'истёк' : 'скоро истекает'}`;
+    default:
+      return `Заявка${n}: контрольный ${term}`;
+  }
+}
 
 export const texts = {
   app: {
@@ -483,6 +512,61 @@ export const texts = {
     text: 'Такой страницы нет или у вас нет к ней доступа.',
   },
 
+  // UI-14. Тексты — по notifications.md, раздел 4, без полей, которых нет в ответе ядра
+  notifications: {
+    intro: 'События по вашим заявкам и этапам. Подробности — в карточке заявки.',
+    empty: 'Новых уведомлений нет',
+    readAll: 'Отметить все прочитанными',
+    read: 'Прочитано',
+    unread: 'не прочитано',
+    all: 'Все уведомления',
+    bell: (count: number) => (count > 0 ? `Уведомления, непрочитанных: ${count}` : 'Уведомления'),
+    pageOf: (page: number, total: number) => `Страница ${page} из ${total}`,
+    unknown: 'Новое событие',
+    unknownRequest: (n: string) => `Новое событие по заявке${n}`,
+    events: {
+      REQUEST_SUBMITTED: ({ n }) => `Заявка${n} отправлена оператору`,
+      REQUEST_ASSIGNED: ({ n, client }) => (client ? `Заявка${n} передана менеджеру` : `Вам назначена заявка${n}`),
+      STAGE_QUEUED: ({ n, s }) => `Новый этап${s} по заявке${n}`,
+      STAGE_ASSIGNED: ({ n, s }) => `Вам назначен этап${s} по заявке${n}`,
+      STAGE_REASSIGN_REQUIRED: ({ n, s }) =>
+        `Этап${s} по заявке${n}: исполнитель недоступен. Назначьте другого исполнителя`,
+      STATUS_CHANGED: ({ n }) => `Заявка${n}: статус изменён`,
+      APPROVAL_RETURNED: ({ n, s }) => `Заявка${n} возвращена на доработку${s ? ` с этапа${s}` : ''}`,
+      TECH_RETURNED: ({ n }) => `Заявка${n} возвращена на доработку техническим специалистом`,
+      CONTRACT_CHANGE_REQUESTED: ({ n }) => `Заявка${n}: клиент просит изменить условия договора`,
+      TECH_RECHECK_REQUIRED: ({ n }) => `Заявка${n}: подключение невозможно по факту, нужна повторная проверка ТВ`,
+      APPROVAL_REJECTED: ({ n }) => `Заявка${n} отклонена`,
+      TECH_RESULT_NONE: ({ n }) => `Заявка${n} отклонена: нет технической возможности`,
+      CONTRACT_READY: ({ n, client }) =>
+        client ? `По заявке${n} готовы условия договора` : `Заявка${n}: этап подписания договора`,
+      SERVICE_ACTIVATED: ({ n }) => `Заявка${n}: услуга активирована`,
+      DEFECT_CLAIMED: ({ n }) => `Заявка${n}: клиент заявил претензию, создан этап устранения замечаний`,
+      ACT_SENT: ({ n }) => `Заявка${n}: акт отправлен, подпишите его или заявите претензию`,
+      ACCEPTANCE_REMINDER: ({ n }) => `Заявка${n}: срок приёмки скоро истечёт`,
+      REQUEST_CLOSED: ({ n }) => `Заявка${n} закрыта`,
+      CANCEL_REQUESTED: ({ n }) => `Заявка${n}: запрос на отмену`,
+      CANCEL_TERMS_READY: ({ n }) => `Заявка${n}: условия отмены готовы`,
+      CANCEL_RESOLVED: ({ n }) => `Заявка${n}: рассмотрение запроса на отмену завершено`,
+      SLA_WARNING: ({ n, s, left }) => `Этап${s} по заявке${n}${left ? `: осталось ${left}` : ': срок скоро истечёт'}`,
+      SLA_BREACH: ({ n, s, coordinator }) =>
+        `Этап${s} по заявке${n} просрочен${coordinator ? '. Переназначьте этап или выясните причину' : ''}`,
+      SLA_ESCALATION: ({ n, s }) => `Эскалация: этап${s} по заявке${n} просрочен повторно. Разберите просрочку`,
+      PAUSE_LIMIT_WARNING: ({ n, s }) => `Заявка${n}: пауза этапа${s} скоро достигнет предела`,
+      PAUSE_LIMIT_REACHED: ({ n, s }) =>
+        `Заявка${n}: пауза этапа${s} достигла предела. Продлите паузу с комментарием или запустите отмену`,
+      CONTROL_DEADLINE_WARNING: ({ n, kind }) => deadlineText(n, kind, false),
+      CONTROL_DEADLINE_BREACH: ({ n, kind }) => deadlineText(n, kind, true),
+      INTEGRATION_ERROR: ({ n }) =>
+        `Заявка${n}: внешняя система недоступна, проверка данных не завершена. Запустите повторную проверку, когда система станет доступна`,
+      COMPANY_CONFIRMED: () => 'Компания подтверждена',
+      COMPANY_REJECTED: () => 'Компания не подтверждена',
+      EXPORT_READY: () => 'Экспорт готов к скачиванию',
+    } satisfies Record<NotificationEventType, (context: NotificationTextContext) => string> as Partial<
+      Record<NotificationEventType, (context: NotificationTextContext) => string>
+    >,
+  },
+
   screens: {
     register: 'Регистрация',
     companyNew: 'Регистрация компании',
@@ -509,7 +593,6 @@ export const texts = {
     queue: 'Очередь роли',
     stageQueues: 'Очереди этапов',
     adminCompanies: 'Подтверждение компаний',
-    notifications: 'Уведомления',
   },
 
   roles: {

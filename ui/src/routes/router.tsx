@@ -6,7 +6,7 @@ import { CompanyPage } from '../pages/CompanyPage';
 import { LoginPage } from '../pages/LoginPage';
 import { ManagerQueuePage } from '../pages/ManagerQueuePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
-import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { NotificationsPage } from '../pages/NotificationsPage';
 import { RegisterPage } from '../pages/RegisterPage';
 import { RequestCardPage } from '../pages/request/RequestCardPage';
 import { RequestFormPage } from '../pages/RequestFormPage';
@@ -14,12 +14,9 @@ import { RequestsPage } from '../pages/RequestsPage';
 import { MyTasksPage } from '../pages/stages/MyTasksPage';
 import { QueuePage } from '../pages/stages/QueuePage';
 import { routeAccess } from '../session/roles';
-import { texts } from '../texts/ru';
 import { HomeRedirect, RequireAuth, RoleRoute } from './guards';
 
-const s = texts.screens;
-
-// Адреса экранов — ui-requirements.md §3.4. Заглушка осталась только у уведомлений (UI-14).
+// Адреса экранов — ui-requirements.md §3.4.
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
@@ -115,7 +112,7 @@ export const routes: RouteObject[] = [
         path: 'notifications',
         element: (
           <RoleRoute access={routeAccess.notifications}>
-            <PlaceholderPage id="UI-14" title={s.notifications} />
+            <NotificationsPage />
           </RoleRoute>
         ),
       },

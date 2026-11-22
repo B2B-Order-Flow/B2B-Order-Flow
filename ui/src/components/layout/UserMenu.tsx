@@ -1,7 +1,6 @@
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
-import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import Divider from '@mui/material/Divider';
@@ -10,20 +9,16 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { canAccess, routeAccess } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
 import { useColorMode } from '../../theme/ColorModeProvider';
 import { c } from '../../theme/tokens';
 import { Avatar } from '../ui/Brand';
 
-// Аватар в шапке открывает меню пользователя: имя и логин, уведомления, смена темы, выход.
-// В макете шапки только аватар, поэтому служебные действия собраны здесь.
+// Аватар в шапке открывает меню пользователя: имя и логин, смена темы, выход.
 export function UserMenu() {
-  const { user, activeRole, logout } = useSession();
+  const { user, logout } = useSession();
   const { mode, toggle } = useColorMode();
-  const navigate = useNavigate();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = () => setAnchor(null);
 
@@ -53,19 +48,6 @@ export function UserMenu() {
           </Typography>
         </Box>
         <Divider />
-        {canAccess(routeAccess.notifications, activeRole) ? (
-          <MenuItem
-            onClick={() => {
-              close();
-              void navigate('/notifications');
-            }}
-          >
-            <ListItemIcon>
-              <NotificationsNoneIcon fontSize="small" />
-            </ListItemIcon>
-            {texts.menu.notifications}
-          </MenuItem>
-        ) : null}
         <MenuItem onClick={toggle} data-testid="theme-toggle">
           <ListItemIcon>
             {mode === 'light' ? <DarkModeOutlinedIcon fontSize="small" /> : <LightModeOutlinedIcon fontSize="small" />}

@@ -9,6 +9,8 @@ import type {
   ContractConcludedPayload,
   LoginRequest,
   LoginResponse,
+  NotificationQuery,
+  NotificationView,
   Page,
   PageQuery,
   RegisterCompanyRequest,
@@ -102,6 +104,13 @@ export const usersApi = {
   byRole: (role: Role) => api.get<Page<OperatorUserView>>('/users', { query: { role, size: 100 } }),
 };
 
+// Уведомления (api-contract.md §6.9, notifications.md §7): прочтение — без тела, ответ 204.
+export const notificationsApi = {
+  list: (query: NotificationQuery = {}) => api.get<Page<NotificationView>>('/notifications', { query: { ...query } }),
+  read: (notificationId: string) => api.post<void>(`/notifications/${notificationId}/read`),
+  readAll: () => api.post<void>('/notifications/read-all'),
+};
+
 // Ключи кэша TanStack Query: одно место, чтобы инвалидировать согласованно.
 export const queryKeys = {
   me: ['me'] as const,
@@ -116,4 +125,6 @@ export const queryKeys = {
   stagesAll: ['stages'] as const,
   sla: (requestId: string) => ['request', requestId, 'sla'] as const,
   usersByRole: (role: string) => ['users', role] as const,
+  notificationsAll: ['notifications'] as const,
+  notifications: (query: object) => ['notifications', query] as const,
 };
