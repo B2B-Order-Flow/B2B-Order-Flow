@@ -225,13 +225,74 @@ public class SlaTimerService {
         return pauseRepository.findFirstByTimerIdAndEndedAtIsNullOrderByStartedAtDesc(timerId);
     }
 
+    /** Снятие ручной паузы: отсчёт продолжается по остатку норматива. */
+    @Transactional
+    public boolean resume(SlaTimer timer) {
+        Optional<SlaPause> active = activePause(timer.getId());
+        if (active.isEmpty()) {
+            return false;
+        }
+        OffsetDateTime now = now();
+        SlaCalendar calendar = calendarFor(timer);
+        SlaNorm norm = normFor(timer);
+        endActivePause(timer);
+
+        long remainingSeconds = Math.max(0, timer.getNormMinutes() * 60L - timer.getElapsedSlaSeconds());
+        OffsetDateTime dueAt = SlaTime.addWorkingTime(
+                now, Duration.ofSeconds(remainingSeconds), calendar);
+        long warningSeconds = Math.max(0, remainingSeconds - norm.getWarnBeforeMinutes() * 60L);
+        OffsetDateTime warnAt = SlaTime.addWorkingTime(
+                now, Duration.ofSeconds(warningSeconds), calendar);
+        OffsetDateTime escalateAt = SlaTime.addWorkingTime(
+                dueAt, Duration.ofMinutes(Math.max(1, timer.getNormMinutes() / 2)), calendar);
+
+        timer.setStatus(SlaTimerStatus.RUNNING);
+        timer.setDueAt(dueAt);
+        timer.setWarnAt(warnAt);
+        timer.setEscalateAt(escalateAt);
+        timer.setNextEventAt(earliest(warnAt, dueAt, escalateAt));
+        timerRepository.save(timer);
+        return true;
+    }
+
+    /** Продление паузы: предел сдвигается на стандартный предел, планировщик получает новое событие. */
+    @Transactional
+    public boolean extendPause(SlaTimer timer, UUID actorId) {
+        Optional<SlaPause> active = activePause(timer.getId());
+        if (active.isEmpty()) {
+            return false;
+        }
+        SlaPause pause = active.get();
+        OffsetDateTime now = now();
+        SlaCalendar calendar = calendarFor(timer);
+        OffsetDateTime newLimit = SlaTime.addWorkingTime(pause.getLimitAt(), pauseLimit(), calendar);
+
+        pause.setLimitAt(newLimit);
+        pause.setExtendedCount(pause.getExtendedCount() + 1);
+        pause.setExtendedBy(actorId);
+        pauseRepository.save(pause);
+
+        Duration untilLimit = SlaTime.workingTimeBetween(now, newLimit, calendar);
+        Duration warningBefore = pauseWarningBefore();
+        Duration untilWarning = untilLimit.compareTo(warningBefore) > 0
+                ? untilLimit.minus(warningBefore)
+                : Duration.ZERO;
+        OffsetDateTime warnAt = SlaTime.addWorkingTime(now, untilWarning, calendar);
+        timer.setNextEventAt(earliest(warnAt, newLimit));
+        timerRepository.save(timer);
+        return true;
+    }
+
     public SlaCalendar calendarFor(SlaTimer timer) {
-        SlaNorm norm = timer.getStageId() == null
+        return calendarFactory.forNorm(normFor(timer));
+    }
+
+    private SlaNorm normFor(SlaTimer timer) {
+        return timer.getStageId() == null
                 ? controlNorm(timer.getKind())
                 : stageNorm(stageRepository.findById(timer.getStageId())
                         .map(RequestStage::getType)
                         .orElse(null));
-        return calendarFactory.forNorm(norm);
     }
 
     private SlaNorm stageNorm(com.b2borderflow.core.request.RequestStageType stageType) {
