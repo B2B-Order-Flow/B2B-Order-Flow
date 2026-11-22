@@ -69,4 +69,25 @@ public final class ApiEnums {
                 ? null
                 : com.b2borderflow.core.api.model.RequestClass.valueOf(value.name());
     }
+
+    public static com.b2borderflow.core.api.model.SlaTimerKind slaTimerKind(
+            com.b2borderflow.core.sla.SlaTimerKind value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.SlaTimerKind.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.SlaTimerStatus slaTimerStatus(
+            com.b2borderflow.core.sla.SlaTimerStatus value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.SlaTimerStatus.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.PauseReason pauseReason(
+            com.b2borderflow.core.sla.PauseReasonCode value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.PauseReason.valueOf(value.name());
+    }
 }
