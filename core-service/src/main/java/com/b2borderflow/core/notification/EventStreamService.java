@@ -3,7 +3,6 @@ package com.b2borderflow.core.notification;
 import com.b2borderflow.core.api.model.EventSignal;
 import com.b2borderflow.core.api.model.NotificationEventType;
 import java.io.IOException;
-import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,12 +33,13 @@ public class EventStreamService {
     private static final int REPLAY_BATCH = 1000;
 
     private final NotificationRepository notificationRepository;
-    private final Clock clock;
+    private final NotificationPublishedService publishedService;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
-    public EventStreamService(NotificationRepository notificationRepository, Clock clock) {
+    public EventStreamService(NotificationRepository notificationRepository,
+                              NotificationPublishedService publishedService) {
         this.notificationRepository = notificationRepository;
-        this.clock = clock;
+        this.publishedService = publishedService;
     }
 
     /** Новое SSE-подключение BFF. */
@@ -70,7 +70,7 @@ public class EventStreamService {
             if (!send(emitter, notification)) {
                 break;
             }
-            markPublished(notification);
+            publishedService.markPublished(notification.getId());
         }
         return emitter;
     }
@@ -108,7 +108,7 @@ public class EventStreamService {
             }
         }
         if (sent) {
-            markPublished(notification);
+            publishedService.markPublished(notification.getId());
         }
     }
 
@@ -132,11 +132,6 @@ public class EventStreamService {
             log.debug("SSE-соединение закрыто: {}", ex.getMessage());
             return false;
         }
-    }
-
-    private void markPublished(Notification notification) {
-        notification.setPublishedAt(OffsetDateTime.now(clock));
-        notificationRepository.save(notification);
     }
 
     private static EventSignal signal(Notification notification) {

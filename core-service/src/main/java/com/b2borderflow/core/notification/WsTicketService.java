@@ -65,14 +65,14 @@ public class WsTicketService {
         if (rawTicket == null || rawTicket.isBlank()) {
             throw invalidTicket();
         }
-        WsTicket ticket = ticketRepository.findByTicketHash(hash(rawTicket.trim()))
-                .orElseThrow(WsTicketService::invalidTicket);
+        String ticketHash = hash(rawTicket.trim());
         OffsetDateTime now = OffsetDateTime.now(clock);
-        if (ticket.getUsedAt() != null || !ticket.getExpiresAt().isAfter(now)) {
+        // Условный UPDATE — единственная точка погашения; параллельный вызов получит 0.
+        if (ticketRepository.consume(ticketHash, now) != 1) {
             throw invalidTicket();
         }
-        ticket.setUsedAt(now);
-        ticketRepository.save(ticket);
+        WsTicket ticket = ticketRepository.findByTicketHash(ticketHash)
+                .orElseThrow(WsTicketService::invalidTicket);
         return new WsTicketRedeemView()
                 .userId(ticket.getUserId())
                 .activeRole(ApiEnums.role(ticket.getActiveRole()));
