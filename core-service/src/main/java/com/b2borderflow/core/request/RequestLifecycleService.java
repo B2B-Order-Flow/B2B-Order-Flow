@@ -165,6 +165,7 @@ public class RequestLifecycleService {
         if (request.getContractSentAt() != null) {
             throw ApiException.illegalTransition("Договор уже отмечен отправленным");
         }
+        requireManagerContract(request);
 
         request.setContractSentAt(OffsetDateTime.now(clock));
         requestRepository.saveAndFlush(request);
@@ -190,6 +191,7 @@ public class RequestLifecycleService {
         if (request.getStatus() != RequestStatus.CONTRACT_SIGNING) {
             throw ApiException.illegalTransition("Договор заключается из статуса CONTRACT_SIGNING");
         }
+        requireManagerContract(request);
         if (payload.getContractNumber() == null || payload.getContractNumber().isBlank()) {
             throw ApiException.validation("Укажите номер договора",
                     List.of(new Violation("contractNumber", "REQUIRED", "Номер договора обязателен")));
@@ -244,9 +246,11 @@ public class RequestLifecycleService {
         if (request.getStatus() != RequestStatus.ACTIVATED) {
             throw ApiException.illegalTransition("Акт отправляется из статуса ACTIVATED");
         }
+        if (request.getActSentAt() != null) {
+            throw ApiException.illegalTransition(
+                    "Акт уже отправлен; новый срок приёмки запускается только после устранения замечаний");
+        }
 
-        // Повторная отправка после устранения замечаний запускает новый срок приёмки.
-        slaTimerService.stopControlTimer(requestId, com.b2borderflow.core.sla.SlaTimerKind.ACCEPTANCE);
         SlaTimer acceptance = slaTimerService.startControlTimer(
                 request, com.b2borderflow.core.sla.SlaTimerKind.ACCEPTANCE);
 
@@ -395,6 +399,19 @@ public class RequestLifecycleService {
         return serviceOfferRepository.findById(request.getSelectedOfferId())
                 .orElseThrow(() -> new ApiException(ErrorCode.ILLEGAL_TRANSITION,
                         "Выбранное предложение не найдено"));
+    }
+
+    /**
+     * Для оферты договор заключается акцептом клиента, а не отметкой менеджера
+     * (status-model.md, 6; ui-requirements.md, 7.3). Менеджер ведёт только
+     * STANDARD и CLIENT_FORM.
+     */
+    private void requireManagerContract(Request request) {
+        ServiceOffer offer = selectedOffer(request);
+        if (offer.getContractType() == ContractType.OFFER) {
+            throw ApiException.illegalTransition(
+                    "Для договора-оферты нужен акцепт клиента (contract/accept-offer)");
+        }
     }
 
     private static void requireOwnerManager(Request request, CurrentUser actor) {

@@ -19,6 +19,7 @@ import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,19 +77,30 @@ public class RequestSlaService {
         accessPolicy.assertCanView(request, actor);
 
         OffsetDateTime now = OffsetDateTime.now(clock);
-        List<SlaTimer> timers = timerRepository.findByRequestIdOrderByCreatedAtAsc(requestId);
-        List<UUID> timerIds = timers.stream().map(SlaTimer::getId).toList();
-        List<SlaPause> pauses = timerIds.isEmpty()
-                ? List.of()
-                : pauseRepository.findByTimerIdInOrderByStartedAtDesc(timerIds);
+        List<SlaTimer> allTimers = timerRepository.findByRequestIdOrderByCreatedAtAsc(requestId);
 
         Map<UUID, RequestStage> stages = new HashMap<>();
-        List<UUID> stageIds = timers.stream()
+        List<UUID> stageIds = allTimers.stream()
                 .map(SlaTimer::getStageId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
         stageRepository.findAllById(stageIds).forEach(stage -> stages.put(stage.getId(), stage));
+
+        Role role = actor.effectiveActiveRole();
+        boolean fullJournal = role == Role.COORDINATOR
+                || role == Role.B2B_HEAD
+                || (role == Role.SALES_MANAGER && Objects.equals(request.getManagerId(), actor.id()));
+        List<SlaTimer> timers = fullJournal
+                ? allTimers
+                : allTimers.stream()
+                        .filter(timer -> visibleToExecutor(timer, stages.get(timer.getStageId()), actor, role))
+                        .toList();
+
+        List<UUID> timerIds = timers.stream().map(SlaTimer::getId).toList();
+        List<SlaPause> pauses = timerIds.isEmpty()
+                ? List.of()
+                : pauseRepository.findByTimerIdInOrderByStartedAtDesc(timerIds);
 
         Map<UUID, SlaPause> activePauses = new HashMap<>();
         for (SlaPause pause : pauses) {
@@ -109,9 +121,22 @@ public class RequestSlaService {
                 .pauses(pauseViews);
     }
 
+    /**
+     * Исполнитель видит SLA только своих этапов: назначенных ему или стоящих
+     * в очереди его активной роли. Контрольные сроки заявки и журнал чужих
+     * этапов остаются менеджеру, координатору и руководителю B2B (sla.md, 6.2, 10).
+     */
+    private static boolean visibleToExecutor(SlaTimer timer, RequestStage stage,
+                                             CurrentUser actor, Role role) {
+        if (timer.getStageId() == null || stage == null) {
+            return false;
+        }
+        return Objects.equals(stage.getAssigneeId(), actor.id())
+                || (stage.getAssigneeId() == null && stage.getQueueRole() == role);
+    }
+
     private SlaTimerView toTimerView(SlaTimer timer, RequestStage stage, SlaPause activePause,
-                                     OffsetDateTime now) {
-        long elapsed = timerService.elapsedSlaSeconds(timer, now);
+                                     OffsetDateTime now) {        long elapsed = timerService.elapsedSlaSeconds(timer, now);
         long normSeconds = timer.getNormMinutes() * 60L;
         long calendarElapsed = timer.getCreatedAt() == null
                 ? 0
