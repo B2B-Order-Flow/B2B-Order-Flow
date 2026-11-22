@@ -24,17 +24,12 @@ class Sc01EndToEndIntegrationTest extends WeekTwoApiSupport {
                 Map.of("result", "AVAILABLE", "version", techStageVersion));
         assertStatus(techResult, 200);
 
-        ApiResponse contractSent = post("/internal/v1/requests/" + flow.requestId() + "/contract/sent",
-                flow.managerToken(), Role.SALES_MANAGER,
+        ApiResponse accepted = post("/internal/v1/requests/" + flow.requestId() + "/contract/accept-offer",
+                flow.clientToken(), Role.CLIENT_OWNER,
                 Map.of("version", currentRequestVersion(flow)));
-        assertStatus(contractSent, 200);
-
-        ApiResponse concluded = post("/internal/v1/requests/" + flow.requestId() + "/contract/concluded",
-                flow.managerToken(), Role.SALES_MANAGER,
-                Map.of("contractNumber", "SC-01/2026", "concludedAt", "2026-11-01",
-                        "version", number(contractSent.body().get("version"))));
-        assertStatus(concluded, 200);
-        assertThat(concluded.body().get("status")).isEqualTo("IN_EXECUTION");
+        assertStatus(accepted, 200);
+        assertThat(accepted.body().get("status")).isEqualTo("IN_EXECUTION");
+        assertThat(accepted.body().get("contractConcludedAt")).isNotNull();
 
         UUID installation = activeStageId(flow, "INSTALLATION");
         ApiResponse installationClaimed = post("/internal/v1/stages/" + installation + "/claim",
@@ -80,7 +75,7 @@ class Sc01EndToEndIntegrationTest extends WeekTwoApiSupport {
                 "REQUEST_COMMERCIAL_TERMS_SET",
                 "STAGE_CLAIMED",
                 "REQUEST_TECH_RESULT_SET",
-                "REQUEST_CONTRACT_CONCLUDED",
+                "REQUEST_OFFER_ACCEPTED",
                 "REQUEST_WORK_STARTED",
                 "STAGE_COMPLETED",
                 "STAGE_ACTIVATED",
