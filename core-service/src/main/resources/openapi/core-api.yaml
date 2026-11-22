@@ -2405,7 +2405,8 @@ components:
           type: object
           description: |
             Данные для подписи без запроса к серверу: `stageId`, `stageType`, `minutesLeft`,
-            `deadlineKind`, `companyId`, `exportId` (docs/system/notifications.md, 5).
+            `deadlineKind`, `companyId`, `exportId`, `status`, `reasonCode`
+            (docs/system/notifications.md, 5).
           additionalProperties: true
         createdAt:
           type: string
