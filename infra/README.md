@@ -1,6 +1,6 @@
 # infra
 
-Docker Compose и скрипты инициализации БД. Конфигурация Nginx лежит рядом с интерфейсом, в `ui/nginx/`. Резервное копирование появится позже. Workflow GitHub Actions лежат в `.github/workflows/` в корне репозитория.
+Docker Compose и скрипты инициализации БД. Конфигурация Nginx лежит рядом с интерфейсом, в `ui/nginx/`. Workflow GitHub Actions лежат в `.github/workflows/` в корне репозитория.
 
 Владелец: Салават.
 
@@ -9,24 +9,24 @@ Docker Compose и скрипты инициализации БД. Конфигу
 | Сервис | Что это |
 |---|---|
 | `core-db` | PostgreSQL 16, база `core_db`. Порт наружу не открыт |
+| `backup` | Ежедневный дамп PostgreSQL под ролью `backup_ro`. По умолчанию хранит последние семь копий в томе `core-backups` |
 | `mock-crm`, `mock-billing`, `mock-registry` | WireMock, описание в `mocks/README.md`. Порты наружу не открыты |
 | `core-service` | Ядро (Spring Boot, Java 21), образ собирается из `core-service/Dockerfile`. Порт наружу не открыт |
 | `bff-gateway` | BFF (FastAPI), образ собирается из `bff-gateway/Dockerfile`. Порт наружу не открыт |
 | `nginx` | Единая точка входа: раздаёт интерфейс, проксирует `/api` и `/ws` в шлюз, ограничивает частоту запросов. Образ собирается из `ui/Dockerfile`. Наружу открыт только он: `127.0.0.1:80` |
 
-После запуска интерфейс открывается на `http://localhost`. Если порт 80 занят, задай в `.env` другой, например `HTTP_PORT=8081`.
+После запуска интерфейс открывается на `http://localhost`. Если порт 80 занят, задай в `.env` другой, например `HTTP_PORT=8090`.
 
 ## Запуск
 
-Из корня репозитория:
+Если `.env` ещё нет, скопируй `.env.example` в `.env` и замени все `change_me` на свои значения. Compose проверяет наличие обязательных переменных, но принимает `change_me` как обычное значение. Команды ниже выполняются из корня репозитория.
 
-```
-cp .env.example .env
+```bash
 docker compose --env-file .env -f infra/compose.yaml up -d --build
 docker compose --env-file .env -f infra/compose.yaml ps
 ```
 
-В `.env` замени все `change_me` на свои значения. Если переменной нет или она пустая, compose не запустится и назовёт её; `change_me` он не проверяет. Остановить: `docker compose --env-file .env -f infra/compose.yaml down`. Флаг `-v` удалит том с БД.
+Чтобы остановить стенд, выполни `docker compose --env-file .env -f infra/compose.yaml down`. Флаг `-v` удаляет тома `core-db-data` и `core-backups`.
 
 Моки на localhost (для отладки и сквозных тестов с хоста) подключаются вторым файлом:
 
@@ -36,14 +36,23 @@ docker compose --env-file .env -f infra/compose.yaml -f infra/compose.mocks-port
 
 Порты: CRM `8081`, биллинг `8082`, справочник `8083`, только на `127.0.0.1`.
 
-Шлюз на localhost (для отладки в обход Nginx) и профиль DEMO подключаются своими файлами:
+Для отладки в обход Nginx можно открыть шлюз на `127.0.0.1:8000`.
 
-```
+```bash
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.app-ports.yaml up -d
-docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml up -d
 ```
 
-Шлюз открывается на `127.0.0.1:8000`. Профиль DEMO задаёт для ядра `SLA_PROFILE=DEMO` (нормативы SLA в минутах). Первая сборка ядра и интерфейса долгая: Maven и npm скачивают зависимости.
+### Стенд DEMO
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml up -d --build --wait
+```
+
+Профиль DEMO переключает нормативы SLA на минуты, загружает демо-пользователей и компании через Flyway и повышает лимиты Nginx для сида и тестов. Первая сборка может занять время, пока Maven и npm скачивают зависимости. Вход на стенд через Nginx по `http://localhost` или по порту `HTTP_PORT` из `.env`.
+
+- [Демо-пользователи и компании](seed/README.md)
+- [Создание демо-заявки через API](seed/demo-requests/README.md)
+- [Запуск сквозных тестов](../tests/e2e/README.md#сквозные-тесты-api)
 
 ## Nginx
 
@@ -60,8 +69,19 @@ docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml 
 
 ## База данных
 
-При первом запуске `postgres/init/01-roles.sh` создаёт две роли: `CORE_DB_MIGRATION_USER` (владелец схемы `public`, под ним идёт Flyway) и `CORE_DB_APP_USER` (права на данные, схему менять не может). Скрипт срабатывает только на пустом томе. Если меняешь имена или пароли в `.env`, пересоздай том: `down -v`.
+При первом запуске `postgres/init/01-roles.sh` создаёт три роли. `CORE_DB_MIGRATION_USER` владеет схемой `public` и запускает миграции Flyway. `CORE_DB_APP_USER` работает с данными приложения. `CORE_DB_BACKUP_USER` читает данные для дампа. Скрипт срабатывает только при инициализации пустого тома. Для существующей базы меняй роли и пароли в PostgreSQL и синхронизируй значения в `.env`.
 
 Для Кирилла: ограничение `audit_log` (приложению только `INSERT` и `SELECT`) делает миграция при создании таблицы, например `REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM core_app`. Имя роли можно брать из плейсхолдера Flyway.
 
 Адреса моков для ядра внутри сети compose: `http://mock-crm:8080`, `http://mock-billing:8080`, `http://mock-registry:8080` (`MOCK_CRM_URL`, `MOCK_BILLING_URL`, `MOCK_REGISTRY_URL`).
+
+## Резервное копирование
+
+Из корня репозитория можно создать дамп вручную и посмотреть список копий.
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml exec backup /usr/local/bin/backup.sh
+docker compose --env-file .env -f infra/compose.yaml exec backup ls -1t /backups
+```
+
+Расписание, проверка восстановления в отдельную БД и ограничения описаны в [инструкции по бэкапу](backup/README.md).
