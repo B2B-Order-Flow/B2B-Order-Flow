@@ -25,6 +25,7 @@ import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
 import { managerLabel, submittedLabel } from './labels';
 import { useRequestAction } from './useRequestAction';
+import { WorkflowActions } from './WorkflowActions';
 
 const t = texts.requestCard;
 const TERMINAL = new Set(['CLOSED', 'REJECTED', 'CANCELLED', 'DRAFT']);
@@ -78,6 +79,7 @@ export function RequestHeader({ request }: { request: RequestView }) {
           {t.acceptOffer}
         </Button>
       ) : null}
+      <WorkflowActions request={request} />
     </>
   );
 
