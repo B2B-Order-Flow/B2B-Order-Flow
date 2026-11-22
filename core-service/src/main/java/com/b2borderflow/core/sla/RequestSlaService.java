@@ -113,7 +113,11 @@ public class RequestSlaService {
                 .map(timer -> toTimerView(timer, stages.get(timer.getStageId()),
                         activePauses.get(timer.getId()), now))
                 .toList();
-        List<SlaPauseView> pauseViews = pauses.stream().map(this::toPauseView).toList();
+        // Журнал пауз — только менеджеру заявки, координатору и B2B_HEAD.
+        // Исполнитель видит текущую паузу в timer.pause, но не историю чужих этапов.
+        List<SlaPauseView> pauseViews = fullJournal
+                ? pauses.stream().map(this::toPauseView).toList()
+                : List.of();
 
         return new SlaView()
                 .requestId(requestId)

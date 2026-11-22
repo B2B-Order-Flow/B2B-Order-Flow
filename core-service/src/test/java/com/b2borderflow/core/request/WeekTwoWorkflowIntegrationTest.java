@@ -263,6 +263,17 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
                 "select status from sla_timer where stage_id = ?", String.class,
                 stageIdOfType(flow, "CLOSING"))).isEqualTo("PAUSED");
 
+        ApiResponse managerSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.managerToken(), Role.SALES_MANAGER);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> managerTimers =
+                (List<Map<String, Object>>) managerSla.body().get("timers");
+        Map<String, Object> acceptanceTimer = managerTimers.stream()
+                .filter(timer -> "ACCEPTANCE".equals(timer.get("kind")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(acceptanceTimer.get("dueAt")).isNotNull();
+
         ApiResponse repeatedAct = post("/internal/v1/requests/" + flow.requestId() + "/act/sent",
                 flow.managerToken(), Role.SALES_MANAGER,
                 Map.of("version", number(actSent.body().get("version"))));
@@ -425,6 +436,45 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         completeTechResult(stageId, techToken, stageVersion, "AVAILABLE", null);
 
         assertThat(timerStatus(flow.requestId(), "TECH_RESULT")).isEqualTo("STOPPED");
+    }
+
+    @Test
+    void slaJournalIsVisibleOnlyToManagerCoordinatorAndHead() {
+        Bootstrap flow = bootstrapWithManager("SMB");
+        UUID stageId = techCheckStage(flow);
+        UUID timerId = jdbc.queryForObject(
+                "select id from sla_timer where stage_id = ?", UUID.class, stageId);
+
+        jdbc.update("""
+                        insert into sla_pause
+                            (timer_id, reason_code, set_by, comment, started_at, ended_at, limit_at, extended_count)
+                        values (?, 'AWAIT_CLIENT_DATA', 'SYSTEM', null,
+                                now() - interval '2 hours', now() - interval '1 hour',
+                                now() - interval '1 hour', 0)
+                        """, timerId);
+        jdbc.update("""
+                        insert into sla_pause
+                            (timer_id, reason_code, set_by, comment, started_at, limit_at, extended_count)
+                        values (?, 'NO_ACCESS', 'SYSTEM', null, now() - interval '1 hour',
+                                now() + interval '1 hour', 0)
+                        """, timerId);
+        jdbc.update("update sla_timer set status = 'PAUSED', next_event_at = now() + interval '1 hour' "
+                + "where id = ?", timerId);
+
+        ApiResponse techSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.techToken(), Role.TECH_SPECIALIST);
+        assertThat(techSla.status()).isEqualTo(200);
+        Map<String, Object> techTimer = timerOfStage(techSla, stageId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> activePause = (Map<String, Object>) techTimer.get("pause");
+        assertThat(activePause).isNotNull();
+        assertThat(activePause.get("reasonCode")).isEqualTo("NO_ACCESS");
+        assertThat((List<?>) techSla.body().get("pauses")).isEmpty();
+
+        ApiResponse managerSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.managerToken(), Role.SALES_MANAGER);
+        assertThat(managerSla.status()).isEqualTo(200);
+        assertThat(pauses(managerSla)).hasSize(2);
     }
 
     @Test
