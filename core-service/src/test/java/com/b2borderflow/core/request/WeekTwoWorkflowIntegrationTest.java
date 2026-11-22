@@ -90,6 +90,12 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(contractStage.get("status")).isEqualTo("IN_PROGRESS");
         assertThat(contractStage.get("assigneeId")).isEqualTo(flow.managerId().toString());
 
+        ApiResponse managerOffer = post("/internal/v1/requests/" + flow.requestId() + "/contract/sent",
+                flow.managerToken(), Role.SALES_MANAGER,
+                Map.of("version", number(card.body().get("version"))));
+        assertThat(managerOffer.status()).isEqualTo(409);
+        assertThat(managerOffer.body().get("code")).isEqualTo("ILLEGAL_TRANSITION");
+
         assertThat(auditActions(flow.requestId()))
                 .contains("STAGE_CLAIMED", "REQUEST_TECH_RESULT_SET", "REQUEST_STATUS_CHANGED");
         assertThat(notificationTypes(flow.requestId()))
@@ -184,7 +190,7 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void fullExecutionChainRunsFromContractToClosing() {
         Bootstrap flow = bootstrapWithManager("SMB");
-        UUID techStageId = techCheckStage(flow);
+        UUID techStageId = techCheckStage(flow, "STANDARD");
         String techToken = login("tech.specialist");
         long techStageVersion = claim(techStageId, techToken);
         completeTechResult(techStageId, techToken, techStageVersion, "AVAILABLE", null);
@@ -257,6 +263,12 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
                 "select status from sla_timer where stage_id = ?", String.class,
                 stageIdOfType(flow, "CLOSING"))).isEqualTo("PAUSED");
 
+        ApiResponse repeatedAct = post("/internal/v1/requests/" + flow.requestId() + "/act/sent",
+                flow.managerToken(), Role.SALES_MANAGER,
+                Map.of("version", number(actSent.body().get("version"))));
+        assertThat(repeatedAct.status()).isEqualTo(409);
+        assertThat(repeatedAct.body().get("code")).isEqualTo("ILLEGAL_TRANSITION");
+
         ApiResponse closed = post("/internal/v1/requests/" + flow.requestId() + "/act/signed",
                 flow.managerToken(), Role.SALES_MANAGER,
                 Map.of("version", number(actSent.body().get("version"))));
@@ -304,7 +316,7 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void closeByDefaultWaitsForAcceptanceDeadline() {
         Bootstrap flow = bootstrapWithManager("SMB");
-        UUID techStageId = techCheckStage(flow);
+        UUID techStageId = techCheckStage(flow, "STANDARD");
         String techToken = login("tech.specialist");
         long techStageVersion = claim(techStageId, techToken);
         completeTechResult(techStageId, techToken, techStageVersion, "AVAILABLE", null);
@@ -418,11 +430,14 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     void slaEndpointShowsTimersPausesAndHidesThemFromClient() {
         Bootstrap flow = bootstrapWithManager("SMB");
-        UUID stageId = techCheckStage(flow);
+        UUID stageId = techCheckStage(flow, "STANDARD");
 
         ApiResponse managerSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
                 flow.managerToken(), Role.SALES_MANAGER);
         assertThat(managerSla.status()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> managerTimers = (List<Map<String, Object>>) managerSla.body().get("timers");
+        assertThat(managerTimers).hasSizeGreaterThan(1);
         Map<String, Object> techTimer = timerOfStage(managerSla, stageId);
         assertThat(techTimer.get("normMinutes")).isEqualTo(1440);
         assertThat(techTimer.get("status")).isEqualTo("RUNNING");
@@ -440,6 +455,11 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         ApiResponse techSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
                 techToken, Role.TECH_SPECIALIST);
         assertThat(techSla.status()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> techTimers = (List<Map<String, Object>>) techSla.body().get("timers");
+        assertThat(techTimers).hasSize(1);
+        assertThat(techTimers.get(0).get("stageId")).isEqualTo(stageId.toString());
+        assertThat((List<?>) techSla.body().get("pauses")).isEmpty();
 
         long stageVersion = claim(stageId, techToken);
         completeTechResult(stageId, techToken, stageVersion, "AVAILABLE", null);
@@ -531,8 +551,12 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     private UUID techCheckStage(Bootstrap flow) {
+        return techCheckStage(flow, "OFFER");
+    }
+
+    private UUID techCheckStage(Bootstrap flow, String contractType) {
         ApiResponse terms = setCommercialTerms(flow, Map.of(
-                "tariffType", "STANDARD", "contractType", "OFFER",
+                "tariffType", "STANDARD", "contractType", contractType,
                 "version", flow.requestVersion()));
         assertThat(terms.status()).isEqualTo(200);
         return UUID.fromString((String) firstStage(terms).get("id"));
