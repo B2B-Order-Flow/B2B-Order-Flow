@@ -230,7 +230,7 @@ public class NotificationService {
                         .collect(java.util.stream.Collectors.toMap(Request::getId, Request::getNumber));
 
         List<NotificationView> content = result.getContent().stream()
-                .map(notification -> toView(notification, requestNumbers.get(notification.getRequestId())))
+                .map(notification -> toView(notification, requestNumber(notification, requestNumbers)))
                 .toList();
         return new NotificationPage()
                 .content(content)
@@ -258,8 +258,7 @@ public class NotificationService {
         return notificationRepository.markAllRead(currentUserProvider.current().id(), OffsetDateTime.now(clock));
     }
 
-    private NotificationView toView(Notification notification, String requestNumber) {
-        NotificationEventType eventType;
+    private NotificationView toView(Notification notification, String requestNumber) {        NotificationEventType eventType;
         try {
             eventType = NotificationEventType.fromValue(notification.getEventType());
         } catch (IllegalArgumentException ex) {
@@ -274,6 +273,15 @@ public class NotificationService {
                 .createdAt(notification.getCreatedAt())
                 .readAt(notification.getReadAt())
                 .publishedAt(notification.getPublishedAt());
+    }
+
+    /**
+     * У уведомлений компании нет requestId. {@code Map.of().get(null)} бросает NPE,
+     * поэтому номер заявки ищем только при заполненном requestId.
+     */
+    private static String requestNumber(Notification notification, Map<UUID, String> requestNumbers) {
+        UUID requestId = notification.getRequestId();
+        return requestId == null ? null : requestNumbers.get(requestId);
     }
 
     private static PageRequest pageable(int page, int size, String sort) {
