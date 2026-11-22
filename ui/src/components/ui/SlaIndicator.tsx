@@ -11,6 +11,7 @@ const COLORS: Record<SlaState, { bar: ColorToken | null; text: ColorToken }> = {
   warn: { bar: 'sla-warn-bar', text: 'sla-warn-text' },
   breach: { bar: 'sla-breach-bar', text: 'sla-breach-text' },
   paused: { bar: null, text: 'text-muted' },
+  stopped: { bar: null, text: 'text-muted' },
 };
 
 export function SlaIndicator({

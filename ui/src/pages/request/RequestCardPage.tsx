@@ -9,6 +9,7 @@ import { ClientRequestPanel, ExternalDataPanel, StageSlaPanel, AddressPanel } fr
 import { CommercialTermsForm } from './CommercialTermsForm';
 import { RequestHeader } from './RequestHeader';
 import { RequestOverview } from './RequestOverview';
+import { RequestSlaPanel } from './SlaPanel';
 import { TechResultForm } from './TechResultForm';
 import { WorkflowNotice } from './WorkflowActions';
 
@@ -52,13 +53,16 @@ export function RequestCardPage() {
 
 function TermsLayout({ request }: { request: RequestView }) {
   return (
-    <Columns>
-      <CommercialTermsForm request={request} />
-      <Columns sx={{ flex: 1, flexDirection: 'column', minWidth: 0, '& > *': { width: '100%' } }}>
-        <ClientRequestPanel request={request} />
-        <ExternalDataPanel request={request} />
+    <>
+      <Columns>
+        <CommercialTermsForm request={request} />
+        <Columns sx={{ flex: 1, flexDirection: 'column', minWidth: 0, '& > *': { width: '100%' } }}>
+          <ClientRequestPanel request={request} />
+          <ExternalDataPanel request={request} />
+        </Columns>
       </Columns>
-    </Columns>
+      <RequestSlaPanel request={request} />
+    </>
   );
 }
 

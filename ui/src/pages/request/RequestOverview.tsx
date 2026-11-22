@@ -17,6 +17,7 @@ import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
 import { c, radius, type ColorToken } from '../../theme/tokens';
 import { actionLabel, actorLabel, dateAt, speedLabel } from './labels';
+import { RequestSlaPanel } from './SlaPanel';
 
 const t = texts.requestCard;
 
@@ -51,6 +52,8 @@ export function RequestOverview({ request }: { request: RequestView }) {
         <Fact label={t.desiredDate} value={formatDate(request.desiredDate)} />
         <Fact label={t.commitment} value={t.level(level)} sub={texts.commitmentLevel[level] ?? ''} />
       </Box>
+
+      <RequestSlaPanel request={request} />
 
       <Columns>
         <RoutePanel request={request} client={client} />

@@ -4,7 +4,7 @@ import type { SlaTimerView } from '../api/types';
 // жёлтый — от 75% до 100%, красный — нарушен, серый — на паузе.
 // Остаток, календарное время и просрочку считает ядро (SlaTimerView); интерфейс их только показывает.
 
-export type SlaState = 'ok' | 'warn' | 'breach' | 'paused';
+export type SlaState = 'ok' | 'warn' | 'breach' | 'paused' | 'stopped';
 
 const WORKDAY_MINUTES = 8 * 60;
 const DAY_MINUTES = 24 * 60;
@@ -55,21 +55,21 @@ export function slaSnapshot(timer: SlaTimerView): SlaSnapshot {
     timer.overdue === true || (remaining !== undefined && remaining < 0) || timer.breachedAt !== undefined;
 
   let state: SlaState = 'ok';
-  if (timer.status === 'PAUSED') state = 'paused';
+  if (timer.status === 'STOPPED') state = breached ? 'breach' : 'stopped';
+  else if (timer.status === 'PAUSED') state = 'paused';
   else if (breached) state = 'breach';
   else if (timer.warnedAt || share >= 0.75) state = 'warn';
 
   let valueLabel: string;
-  if (state === 'paused') valueLabel = 'пауза';
+  if (timer.status === 'STOPPED') valueLabel = breached ? 'завершён с просрочкой' : 'завершён';
+  else if (state === 'paused') valueLabel = 'пауза';
   else if (breached) {
-    // Насколько просрочено: отрицательный остаток или время с момента нарушения
-    const overSeconds =
-      remaining !== undefined && remaining < 0
-        ? -remaining
-        : timer.breachedAt
-          ? (Date.now() - Date.parse(timer.breachedAt)) / 1000
-          : null;
-    valueLabel = overSeconds !== null ? `просрочено на ${formatDuration(overSeconds / 60, work)}` : 'просрочено';
+    // Ядро не отдаёт отрицательный остаток, поэтому обычно считаем от breachedAt.
+    // Это настоящее (календарное) время: переводить его в рабочие дни нельзя
+    let over: string | null = null;
+    if (remaining !== undefined && remaining < 0) over = formatDuration(-remaining / 60, work);
+    else if (timer.breachedAt) over = formatDuration((Date.now() - Date.parse(timer.breachedAt)) / 60_000, false);
+    valueLabel = over ? `просрочено на ${over}` : 'просрочено';
   } else if (remaining !== undefined) valueLabel = `осталось ${formatDuration(remaining / 60, work)}`;
   else valueLabel = '—';
 

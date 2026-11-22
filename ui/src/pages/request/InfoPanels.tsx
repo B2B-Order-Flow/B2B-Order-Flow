@@ -1,14 +1,14 @@
 import Typography from '@mui/material/Typography';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys, requestsApi } from '../../api/endpoints';
-import type { RequestView, SlaTimerView, StageView } from '../../api/types';
-import { SlaIndicator } from '../../components/ui/SlaIndicator';
+import type { RequestView, StageView } from '../../api/types';
 import { KeyValueGrid, Panel, PanelTitle } from '../../components/ui/Panel';
 import { formatDate, formatMoney } from '../../lib/format';
-import { slaSnapshot, stageTimer } from '../../lib/sla';
+import { stageTimer } from '../../lib/sla';
 import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
 import { speedLabel } from './labels';
+import { SlaTimerRow } from './SlaPanel';
 
 const t = texts.requestCard;
 
@@ -66,37 +66,13 @@ export function StageSlaPanel({ stage }: { stage: StageView }) {
           {texts.common.loading}
         </Typography>
       ) : timer ? (
-        <StageSla stageName={texts.stageType[stage.type]} timer={timer} />
+        <SlaTimerRow timer={timer} />
       ) : (
         <Typography variant="body1" sx={{ color: c('text-muted') }}>
           {t.slaUnknown}
         </Typography>
       )}
     </Panel>
-  );
-}
-
-function StageSla({ stageName, timer }: { stageName: string; timer: SlaTimerView }) {
-  const snapshot = slaSnapshot(timer);
-  const times = [
-    snapshot.slaTimeLabel ? t.slaTime(snapshot.slaTimeLabel) : null,
-    snapshot.calendarTimeLabel ? t.calendarTime(snapshot.calendarTimeLabel) : null,
-    timer.pause ? t.pausedNow(texts.pauseReason[timer.pause.reasonCode]) : null,
-  ].filter(Boolean);
-  return (
-    <>
-      <SlaIndicator
-        label={`${stageName}, ${snapshot.normLabel}`}
-        value={snapshot.valueLabel}
-        state={snapshot.state}
-        share={snapshot.share}
-      />
-      {times.length ? (
-        <Typography variant="caption" sx={{ color: c('text-muted') }}>
-          {times.join(' ')}
-        </Typography>
-      ) : null}
-    </>
   );
 }
 
