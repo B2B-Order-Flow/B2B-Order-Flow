@@ -147,7 +147,8 @@ public class RequestLifecycleService {
         auditService.record(actor, request.getCompanyId(), request.getId(),
                 AuditAction.REQUEST_STATUS_CHANGED, "REQUEST", request.getId(),
                 previousStatus, RequestStatus.TECH_CHECK.name(), null, Map.of("transition", "T04"));
-        notificationService.notifyAuthorAndManager(request, NotificationEvent.STATUS_CHANGED);
+        notificationService.notifyAuthorAndManager(request, NotificationEvent.STATUS_CHANGED,
+                Map.of("status", request.getStatus().name()));
         return viewFactory.toView(request, actor, List.of());
     }
 
@@ -360,7 +361,8 @@ public class RequestLifecycleService {
         auditService.record(actor, request.getCompanyId(), request.getId(),
                 AuditAction.REQUEST_STATUS_CHANGED, "REQUEST", request.getId(),
                 previousStatus, RequestStatus.IN_EXECUTION.name(), null, Map.of("transition", transition));
-        notificationService.notifyAuthorAndManager(request, NotificationEvent.STATUS_CHANGED);
+        notificationService.notifyAuthorAndManager(request, NotificationEvent.STATUS_CHANGED,
+                Map.of("status", request.getStatus().name()));
     }
 
     private void closeRequest(Request request, CurrentUser actor, boolean acceptedByDefault,
