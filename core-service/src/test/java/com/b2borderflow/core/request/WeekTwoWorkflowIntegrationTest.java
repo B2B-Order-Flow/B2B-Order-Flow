@@ -7,8 +7,6 @@ import com.b2borderflow.core.company.CompanyStatus;
 import com.b2borderflow.core.domain.Role;
 import com.b2borderflow.core.support.AbstractIntegrationTest;
 import com.b2borderflow.core.user.AppUser;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -84,10 +82,10 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(card.status()).isEqualTo(200);
         assertThat(card.body().get("status")).isEqualTo("CONTRACT_SIGNING");
         assertThat(card.body().get("techResult")).isEqualTo("AVAILABLE");
-        assertThat(card.body().get("routeVersion")).isEqualTo(2);
+        assertThat(card.body().get("routeVersion")).isEqualTo(1);
         assertThat(card.body().get("commitmentLevel")).isEqualTo(0);
 
-        Map<String, Object> contractStage = firstStage(card);
+        Map<String, Object> contractStage = stageOfType(card, "CONTRACT_SIGNING");
         assertThat(contractStage.get("type")).isEqualTo("CONTRACT_SIGNING");
         assertThat(contractStage.get("status")).isEqualTo("IN_PROGRESS");
         assertThat(contractStage.get("assigneeId")).isEqualTo(flow.managerId().toString());
@@ -207,7 +205,7 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         ApiResponse concluded = post("/internal/v1/requests/" + flow.requestId() + "/contract/concluded",
                 flow.managerToken(), Role.SALES_MANAGER,
                 Map.of("contractNumber", "Д-2026/17",
-                        "concludedAt", businessToday(),
+                        "concludedAt", CONTRACT_DATE,
                         "version", number(contractSent.body().get("version"))));
         assertThat(concluded.status()).isEqualTo(200);
         assertThat(concluded.body().get("status")).isEqualTo("IN_EXECUTION");
@@ -315,7 +313,7 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
                 flow.managerToken(), Role.SALES_MANAGER, Map.of("version", currentRequestVersion(flow)));
         post("/internal/v1/requests/" + flow.requestId() + "/contract/concluded",
                 flow.managerToken(), Role.SALES_MANAGER,
-                Map.of("contractNumber", "Д-2", "concludedAt", businessToday(),
+                Map.of("contractNumber", "Д-2", "concludedAt", CONTRACT_DATE,
                         "version", number(contractSent.body().get("version"))));
 
         String engineerToken = login("engineer");
@@ -385,6 +383,97 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(duplicate.body().get("code")).isEqualTo("ILLEGAL_TRANSITION");
     }
 
+    @Test
+    void controlDeadlinesStartAtSubmissionAndStopOnTransitions() {
+        Bootstrap flow = bootstrapWithoutManager("SMB");
+
+        assertThat(timerStatus(flow.requestId(), "DATA_CHECK")).isEqualTo("STOPPED");
+        assertThat(timerStatus(flow.requestId(), "MANAGER_ASSIGNMENT")).isEqualTo("RUNNING");
+        assertThat(timerStatus(flow.requestId(), "TECH_RESULT")).isEqualTo("RUNNING");
+        assertThat(timerNorm(flow.requestId(), "MANAGER_ASSIGNMENT")).isEqualTo(240);
+        assertThat(timerNorm(flow.requestId(), "TECH_RESULT")).isEqualTo(43_200);
+        assertThat(timerWarnBeforeDue(flow.requestId(), "MANAGER_ASSIGNMENT")).isTrue();
+        assertThat(timerWarnBeforeDue(flow.requestId(), "TECH_RESULT")).isTrue();
+
+        String coordinatorToken = login("coordinator");
+        ApiResponse assigned = post("/internal/v1/requests/" + flow.requestId() + "/assign-manager",
+                coordinatorToken, Role.COORDINATOR,
+                Map.of("managerId", flow.managerId().toString(),
+                        "version", flow.requestVersion()));
+        assertThat(assigned.status()).isEqualTo(200);
+        assertThat(assigned.body().get("status")).isEqualTo("WITH_MANAGER");
+        assertThat(timerStatus(flow.requestId(), "MANAGER_ASSIGNMENT")).isEqualTo("STOPPED");
+
+        ApiResponse terms = setCommercialTerms(flow, Map.of(
+                "tariffType", "STANDARD", "contractType", "OFFER",
+                "version", number(assigned.body().get("version"))));
+        UUID stageId = UUID.fromString((String) firstStage(terms).get("id"));
+        String techToken = login("tech.specialist");
+        long stageVersion = claim(stageId, techToken);
+        completeTechResult(stageId, techToken, stageVersion, "AVAILABLE", null);
+
+        assertThat(timerStatus(flow.requestId(), "TECH_RESULT")).isEqualTo("STOPPED");
+    }
+
+    @Test
+    void slaEndpointShowsTimersPausesAndHidesThemFromClient() {
+        Bootstrap flow = bootstrapWithManager("SMB");
+        UUID stageId = techCheckStage(flow);
+
+        ApiResponse managerSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.managerToken(), Role.SALES_MANAGER);
+        assertThat(managerSla.status()).isEqualTo(200);
+        Map<String, Object> techTimer = timerOfStage(managerSla, stageId);
+        assertThat(techTimer.get("normMinutes")).isEqualTo(1440);
+        assertThat(techTimer.get("status")).isEqualTo("RUNNING");
+        assertThat(number(techTimer.get("remainingSlaSeconds"))).isPositive();
+        assertThat(techTimer.get("dueAt")).isNotNull();
+        assertThat(techTimer.get("pause")).isNull();
+        assertThat(pauses(managerSla)).isEmpty();
+
+        ApiResponse clientSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.clientToken(), Role.CLIENT_OWNER);
+        assertThat(clientSla.status()).isEqualTo(403);
+        assertThat(clientSla.body().get("code")).isEqualTo("ACCESS_DENIED");
+
+        String techToken = login("tech.specialist");
+        ApiResponse techSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                techToken, Role.TECH_SPECIALIST);
+        assertThat(techSla.status()).isEqualTo(200);
+
+        long stageVersion = claim(stageId, techToken);
+        completeTechResult(stageId, techToken, stageVersion, "AVAILABLE", null);
+        UUID contractStageId = stageIdOfType(flow, "CONTRACT_SIGNING");
+
+        ApiResponse contractSent = post("/internal/v1/requests/" + flow.requestId() + "/contract/sent",
+                flow.managerToken(), Role.SALES_MANAGER, Map.of("version", currentRequestVersion(flow)));
+        assertThat(contractSent.status()).isEqualTo(200);
+
+        ApiResponse pausedSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.managerToken(), Role.SALES_MANAGER);
+        Map<String, Object> contractTimer = timerOfStage(pausedSla, contractStageId);
+        assertThat(contractTimer.get("status")).isEqualTo("PAUSED");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> activePause = (Map<String, Object>) contractTimer.get("pause");
+        assertThat(activePause).isNotNull();
+        assertThat(activePause.get("reasonCode")).isEqualTo("AWAIT_CLIENT_SIGNATURE");
+        assertThat(activePause.get("setBy")).isNull();
+        assertThat(activePause.get("limitAt")).isNotNull();
+        assertThat(pauses(pausedSla)).hasSize(1);
+
+        ApiResponse concluded = post("/internal/v1/requests/" + flow.requestId() + "/contract/concluded",
+                flow.managerToken(), Role.SALES_MANAGER,
+                Map.of("contractNumber", "Д-SLA", "concludedAt", CONTRACT_DATE,
+                        "version", number(contractSent.body().get("version"))));
+        assertThat(concluded.status()).isEqualTo(200);
+
+        ApiResponse endedSla = get("/internal/v1/requests/" + flow.requestId() + "/sla",
+                flow.managerToken(), Role.SALES_MANAGER);
+        assertThat(timerOfStage(endedSla, contractStageId).get("status")).isEqualTo("STOPPED");
+        assertThat(pauses(endedSla)).hasSize(1);
+        assertThat(pauses(endedSla).get(0).get("endedAt")).isNotNull();
+    }
+
     // --- сценарные помощники ---
 
     private Bootstrap bootstrapWithManager(String segment) {
@@ -411,6 +500,29 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         return new Bootstrap(requestId, number(submitted.body().get("version")),
                 client.getId(), manager.getId(), tech.getId(),
                 clientToken, login("sales.manager"), login("tech.specialist"), company.getId());
+    }
+
+    private Bootstrap bootstrapWithoutManager(String segment) {
+        AppUser client = createUser("client.owner", "Алексей Соколов");
+        createCompany("ИП Соколов", INN, CompanyStatus.ACTIVE, client);
+        AppUser manager = createUser("sales.manager", "Анна Смирнова", Role.SALES_MANAGER);
+        AppUser tech = createUser("tech.specialist", "Павел Орлов", Role.TECH_SPECIALIST);
+        createUser("engineer", "Инженер", Role.ENGINEER);
+        createUser("coordinator", "Мария Ковалёва", Role.COORDINATOR);
+        stubAllExternalSystems(INN, segment, null);
+
+        String clientToken = login("client.owner");
+        ApiResponse created = post("/internal/v1/requests", clientToken, Role.CLIENT_OWNER, requestPayload());
+        assertThat(created.status()).isEqualTo(201);
+        UUID requestId = UUID.fromString((String) created.body().get("id"));
+        ApiResponse submitted = post("/internal/v1/requests/" + requestId + "/submit",
+                clientToken, Role.CLIENT_OWNER, Map.of("version", number(created.body().get("version"))));
+        assertThat(submitted.status()).isEqualTo(200);
+        assertThat(submitted.body().get("status")).isEqualTo("DATA_CHECK");
+
+        return new Bootstrap(requestId, number(submitted.body().get("version")),
+                client.getId(), manager.getId(), tech.getId(),
+                clientToken, login("sales.manager"), login("tech.specialist"), null);
     }
 
     private ApiResponse setCommercialTerms(Bootstrap flow, Map<String, Object> body) {
@@ -466,6 +578,14 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @SuppressWarnings("unchecked")
+    private static Map<String, Object> stageOfType(ApiResponse response, String type) {
+        return ((List<Map<String, Object>>) response.body().get("stages")).stream()
+                .filter(stage -> type.equals(stage.get("type")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("В карточке нет этапа " + type));
+    }
+
+    @SuppressWarnings("unchecked")
     private static Map<String, String> stageTypeStatuses(ApiResponse response) {
         return ((List<Map<String, Object>>) response.body().get("stages")).stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -485,14 +605,46 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
                 String.class, requestId);
     }
 
+    private String timerStatus(UUID requestId, String kind) {
+        return jdbc.queryForObject(
+                "select status from sla_timer where request_id = ? and kind = ? "
+                        + "order by created_at desc limit 1",
+                String.class, requestId, kind);
+    }
+
+    private int timerNorm(UUID requestId, String kind) {
+        return jdbc.queryForObject(
+                "select norm_minutes from sla_timer where request_id = ? and kind = ? "
+                        + "order by created_at desc limit 1",
+                Integer.class, requestId, kind);
+    }
+
+    private boolean timerWarnBeforeDue(UUID requestId, String kind) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "select warn_at < due_at from sla_timer where request_id = ? and kind = ? "
+                        + "order by created_at desc limit 1",
+                Boolean.class, requestId, kind));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> timerOfStage(ApiResponse sla, UUID stageId) {
+        return ((List<Map<String, Object>>) sla.body().get("timers")).stream()
+                .filter(timer -> stageId.toString().equals(timer.get("stageId")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("В SLA нет таймера этапа " + stageId));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> pauses(ApiResponse sla) {
+        return (List<Map<String, Object>>) sla.body().get("pauses");
+    }
+
     private static long number(Object value) {
         return ((Number) value).longValue();
     }
 
-    /** «Сегодня» для даты договора — по часовому поясу календаря оператора (api-contract.md, 10.11). */
-    private static String businessToday() {
-        return LocalDate.now(ZoneId.of("Europe/Moscow")).toString();
-    }
+    /** Дата договора из тестового сценария: заведомо в прошлом, не зависит от реальных часов. */
+    private static final String CONTRACT_DATE = "2026-11-01";
 
     private record Bootstrap(UUID requestId, long requestVersion, UUID clientId, UUID managerId,
                              UUID techId, String clientToken, String managerToken, String techToken,

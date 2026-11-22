@@ -137,6 +137,27 @@ class SlaTimeTest {
     }
 
     @Test
+    void calendarKindCalendarCountsWallMinutesAcrossWeekend() {
+        OffsetDateTime friday = at("2026-11-06T13:00:00Z");
+
+        assertThat(SlaTime.addWorkingTime(friday, Duration.ofDays(3), WallClockSlaCalendar.INSTANCE))
+                .as("календарный норматив не перескакивает выходные")
+                .isEqualTo(at("2026-11-09T13:00:00Z"));
+        assertThat(SlaTime.workingTimeBetween(
+                friday, at("2026-11-09T13:00:00Z"), WallClockSlaCalendar.INSTANCE))
+                .isEqualTo(Duration.ofDays(3));
+    }
+
+    @Test
+    void techResultControlDeadlineIsThirtyCalendarDaysInProd() {
+        OffsetDateTime from = at("2026-11-16T06:00:00Z");
+
+        assertThat(SlaTime.addWorkingTime(from, Duration.ofMinutes(43_200), WallClockSlaCalendar.INSTANCE))
+                .as("30 календарных дней по ПП 2607, п. 23")
+                .isEqualTo(at("2026-12-16T06:00:00Z"));
+    }
+
+    @Test
     void prodCalendarIsBuiltFromWorkCalendarEntries() {
         WorkCalendar holiday = new WorkCalendar();
         holiday.setCalendarDate(LocalDate.of(2026, 11, 4));
