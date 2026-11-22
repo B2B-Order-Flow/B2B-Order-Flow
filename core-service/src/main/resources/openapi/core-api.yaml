@@ -1067,6 +1067,11 @@ paths:
         Норматив, остаток, время по SLA и календарное, журнал пауз по каждому этапу и по
         контрольным срокам заявки (docs/system/sla.md, 8 и 10). Доступно менеджеру,
         исполнителям этапов, руководителю B2B и координатору; клиенту SLA не показывается — `403`.
+        Исполнитель видит таймеры только доступных ему этапов (назначенных ему или стоящих
+        в очереди его активной роли); текущая пауза такого этапа остаётся в `timer.pause`,
+        а отдельный журнал `pauses` для исполнителя — пустой массив. Полный журнал пауз
+        получают менеджер этой заявки, координатор и руководитель B2B; менеджеру также
+        доступен контрольный таймер `ACCEPTANCE` с `dueAt` для действия «Закрыть по умолчанию».
       parameters:
         - $ref: '#/components/parameters/RequestId'
       responses:
@@ -2052,16 +2057,20 @@ components:
           $ref: '#/components/schemas/StageStatus'
         queueRole:
           $ref: '#/components/schemas/Role'
+          description: Не отдаётся клиенту
         assigneeId:
           type: string
           format: uuid
           description: Не отдаётся клиенту
+        assigneeName:
+          type: string
+          description: ФИО исполнителя для ролей оператора; не отдаётся клиенту
         needsReassignment:
           type: boolean
-          description: Исполнитель деактивирован, этап ждёт переназначения
+          description: Исполнитель деактивирован, этап ждёт переназначения; не отдаётся клиенту
         requiredByRules:
           type: array
-          description: ID сработавших правил маршрутизации, из-за которых создан этап
+          description: ID сработавших правил маршрутизации; не отдаётся клиенту
           items:
             type: string
             example: R-01
@@ -2305,7 +2314,10 @@ components:
             $ref: '#/components/schemas/SlaTimerView'
         pauses:
           type: array
-          description: Журнал пауз заявки, новые сверху
+          description: |
+            Журнал пауз заявки, новые сверху. Полный журнал — менеджеру заявки,
+            координатору и руководителю B2B; исполнителю возвращается пустой массив,
+            текущая пауза его этапа доступна в `timer.pause`.
           items:
             $ref: '#/components/schemas/SlaPauseView'
     SlaPausePayload:

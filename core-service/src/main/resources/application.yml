@@ -51,6 +51,9 @@ app:
     jwt-secret: ${JWT_SECRET}
     jwt-ttl: 8h
     internal-token: ${INTERNAL_TOKEN}
+  sla:
+    # PROD — рабочие часы и праздники, DEMO — нормативы в минутах (docs/system/sla.md, 3).
+    profile: ${SLA_PROFILE:PROD}
   integration:
     crm-url: ${MOCK_CRM_URL:http://localhost:8081}
     billing-url: ${MOCK_BILLING_URL:http://localhost:8082}

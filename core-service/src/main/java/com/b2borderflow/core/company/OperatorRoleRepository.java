@@ -9,5 +9,7 @@ public interface OperatorRoleRepository extends JpaRepository<OperatorRole, Oper
 
     List<OperatorRole> findByIdUserId(UUID userId);
 
+    List<OperatorRole> findByIdRole(Role role);
+
     boolean existsByIdUserIdAndIdRole(UUID userId, Role role);
 }

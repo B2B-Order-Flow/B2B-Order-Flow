@@ -27,17 +27,25 @@ public class RequestViewFactory {
 
     private final ServiceOfferRepository serviceOfferRepository;
     private final CompanyRepository companyRepository;
+    private final RequestStageRepository stageRepository;
+    private final StageViewMapper stageViewMapper;
 
     public RequestViewFactory(ServiceOfferRepository serviceOfferRepository,
-                              CompanyRepository companyRepository) {
+                              CompanyRepository companyRepository,
+                              RequestStageRepository stageRepository,
+                              StageViewMapper stageViewMapper) {
         this.serviceOfferRepository = serviceOfferRepository;
         this.companyRepository = companyRepository;
+        this.stageRepository = stageRepository;
+        this.stageViewMapper = stageViewMapper;
     }
 
     public RequestView toView(Request request, CurrentUser viewer, List<Warning> warnings) {
         Company company = companyRepository.findById(request.getCompanyId()).orElse(null);
         List<ServiceOffer> offers = serviceOfferRepository.findByRequestIdOrderByPositionAsc(request.getId());
-        return buildView(request, viewer, offers, company, warnings);
+        List<RequestStage> stages = stageRepository
+                .findByRequestIdAndRouteVersionOrderByCreatedAtAsc(request.getId(), request.getRouteVersion());
+        return buildView(request, viewer, offers, stages, company, warnings);
     }
 
     public List<RequestView> toViews(List<Request> requests, CurrentUser viewer) {
@@ -51,6 +59,11 @@ public class RequestViewFactory {
                 .stream()
                 .collect(Collectors.groupingBy(ServiceOffer::getRequestId));
 
+        Map<UUID, List<RequestStage>> stagesByRequest = stageRepository
+                .findByRequestIdInOrderByRequestIdAscCreatedAtAsc(requestIds)
+                .stream()
+                .collect(Collectors.groupingBy(RequestStage::getRequestId));
+
         Map<UUID, Company> companiesById = companyRepository
                 .findAllById(requests.stream().map(Request::getCompanyId).distinct().toList())
                 .stream()
@@ -62,6 +75,9 @@ public class RequestViewFactory {
                     request,
                     viewer,
                     offersByRequest.getOrDefault(request.getId(), List.of()),
+                    stagesByRequest.getOrDefault(request.getId(), List.of()).stream()
+                            .filter(stage -> stage.getRouteVersion() == request.getRouteVersion())
+                            .toList(),
                     companiesById.get(request.getCompanyId()),
                     List.of()));
         }
@@ -69,11 +85,14 @@ public class RequestViewFactory {
     }
 
     private RequestView buildView(Request request, CurrentUser viewer, Collection<ServiceOffer> offers,
-                                  Company company, List<Warning> warnings) {
+                                  Collection<RequestStage> stages, Company company, List<Warning> warnings) {
         boolean clientView = isClientView(viewer);
 
         List<ServiceOfferView> offerViews = offers.stream()
                 .map(this::toOfferView)
+                .toList();
+        List<com.b2borderflow.core.api.model.StageView> stageViews = stages.stream()
+                .map(stage -> stageViewMapper.toView(stage, request.getNumber(), clientView))
                 .toList();
 
         RequestView view = new RequestView()
@@ -103,6 +122,21 @@ public class RequestViewFactory {
                 .isGovCustomer(request.getGovCustomer())
                 .selectedOfferId(request.getSelectedOfferId())
                 .offers(offerViews)
+                .requestClass(ApiEnums.requestClass(requestClass(request.getRequestClass())))
+                .techResult(ApiEnums.techResult(techResult(request.getTechResult())))
+                .techRejectReasonCode(request.getTechRejectReasonCode())
+                .techRejectReason(request.getTechRejectReason())
+                .capex(money(request.getCapex()))
+                .constructionDays(request.getConstructionDays())
+                .contractNumber(request.getContractNumber())
+                .contractSentAt(request.getContractSentAt())
+                .contractConcludedAt(request.getContractConcludedAt())
+                .workStartedAt(request.getWorkStartedAt())
+                .activatedAt(request.getActivatedAt())
+                .actSentAt(request.getActSentAt())
+                .closedAt(request.getClosedAt())
+                .acceptedByDefault(request.isAcceptedByDefault())
+                .stages(stageViews)
                 .warnings(warnings == null ? List.of() : warnings);
 
         if (!clientView) {
@@ -129,6 +163,28 @@ public class RequestViewFactory {
 
     private static String money(BigDecimal value) {
         return value == null ? null : value.toPlainString();
+    }
+
+    private static com.b2borderflow.core.request.TechResult techResult(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return com.b2borderflow.core.request.TechResult.valueOf(value);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private static com.b2borderflow.core.routing.RequestClass requestClass(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return com.b2borderflow.core.routing.RequestClass.valueOf(value);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /** Клиент видит клиентскую версию карточки, даже если у него есть и операторская роль. */
