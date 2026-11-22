@@ -3,27 +3,51 @@ import { randomUUID } from 'node:crypto';
 import { apiUrl } from './env';
 
 // Пароль у всех демо-пользователей общий (infra/seed/README.md)
-const password = process.env.DEMO_PASSWORD ?? '';
+export const demoPassword = process.env.DEMO_PASSWORD ?? '';
 
-export async function login(request: APIRequestContext, loginName: string): Promise<string> {
-  if (!password) throw new Error('Не задана переменная DEMO_PASSWORD');
-  const res = await request.post(`${apiUrl}/api/v1/auth/login`, {
-    data: { login: loginName, password },
+const url = (path: string) => `${apiUrl}/api/v1${path}`;
+
+export interface Stage {
+  id: string;
+  type: string;
+  status: string;
+  version: number;
+}
+
+export interface Req {
+  id: string;
+  status: string;
+  version: number;
+  managerId?: string; // клиенту не отдаётся: читать токеном оператора
+  commitmentLevel?: number;
+  integrationError?: boolean;
+  closedAt?: string;
+  stages?: Stage[];
+}
+
+export async function login(request: APIRequestContext, loginName: string) {
+  if (!demoPassword) throw new Error('Не задана переменная DEMO_PASSWORD');
+  const res = await request.post(url('/auth/login'), {
+    data: { login: loginName, password: demoPassword },
   });
   if (!res.ok()) throw new Error(`Вход ${loginName}: ${res.status()}`);
-  return (await res.json()).accessToken;
+  const body = await res.json();
+  return { token: body.accessToken as string, userId: body.user.id as string };
 }
 
 export const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
+// Желаемая дата: сегодня + n дней, контракт требует «не раньше сегодняшней»
+const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
 // Каждый тест создаёт свою заявку: тесты не зависят друг от друга
-export async function createDraft(request: APIRequestContext, token: string) {
-  const res = await request.post(`${apiUrl}/api/v1/requests`, {
+export async function createDraft(request: APIRequestContext, token: string): Promise<Req> {
+  const res = await request.post(url('/requests'), {
     headers: { ...auth(token), 'Idempotency-Key': randomUUID() },
     data: {
       address: 'г. Екатеринбург, ул. Ленина, 1',
       requestedSpeedMbps: 100,
-      desiredDate: '2026-12-01',
+      desiredDate: inDays(30),
       contactName: 'Соколов А. В.',
       contactPhone: '+79990000001',
       contractPreference: 'OFFER',
@@ -33,11 +57,27 @@ export async function createDraft(request: APIRequestContext, token: string) {
   return res.json();
 }
 
-export async function submit(request: APIRequestContext, token: string, id: string, version: number) {
-  // Ответ приходит после опроса CRM, биллинга и справочника, поэтому таймаут с запасом
-  return request.post(`${apiUrl}/api/v1/requests/${id}/submit`, {
-    headers: auth(token),
-    data: { version },
-    timeout: 15_000,
-  });
+// Действие над заявкой или этапом: ответ 200 или понятная ошибка с телом
+export async function act<T = Req>(
+  request: APIRequestContext,
+  token: string,
+  path: string,
+  data: Record<string, unknown>,
+): Promise<T> {
+  // submit ждёт опроса CRM, биллинга и справочника, поэтому таймаут с запасом
+  const res = await request.post(url(path), { headers: auth(token), data, timeout: 15_000 });
+  if (!res.ok()) throw new Error(`POST ${path}: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export async function getRequest(request: APIRequestContext, token: string, id: string): Promise<Req> {
+  const res = await request.get(url(`/requests/${id}`), { headers: auth(token) });
+  if (!res.ok()) throw new Error(`GET /requests/${id}: ${res.status()}`);
+  return res.json();
+}
+
+export function stageOf(req: Req, type: string): Stage {
+  const stage = req.stages?.find((s) => s.type === type && s.status !== 'CANCELLED' && s.status !== 'SUPERSEDED');
+  if (!stage) throw new Error(`В заявке нет этапа ${type}`);
+  return stage;
 }

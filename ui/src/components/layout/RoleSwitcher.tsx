@@ -1,46 +1,80 @@
-import FormControl from '@mui/material/FormControl';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
+import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import Typography from '@mui/material/Typography';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { Role } from '../../api/types';
 import { homePath } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
+import { c, radius, textStyles } from '../../theme/tokens';
 
-// Переключатель ролей (ui-requirements.md §3.3): выбранная роль уходит в X-Active-Role,
-// кэш сбрасывается, открывается главный экран роли.
+const pillSx = {
+  ...textStyles.body,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  px: '14px',
+  py: '9px',
+  borderRadius: `${radius.full}px`,
+  border: `1px solid ${c('border-strong')}`,
+  color: c('text-primary'),
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+} as const;
+
+// Переключатель ролей (ui-requirements.md §3.3) — «таблетка» с ролью в шапке. Выбранная роль уходит
+// в X-Active-Role, кэш сбрасывается, открывается главный экран роли.
 export function RoleSwitcher() {
   const { roles, activeRole, setActiveRole } = useSession();
   const navigate = useNavigate();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   if (roles.length === 0 || activeRole === null) return null;
   if (roles.length === 1) {
     return (
-      <Typography variant="body2" sx={{ opacity: 0.9 }} data-testid="active-role">
+      <Box sx={pillSx} data-testid="active-role">
         {texts.roles[activeRole]}
-      </Typography>
+      </Box>
     );
   }
 
   return (
-    <FormControl size="small" sx={{ minWidth: 220 }}>
-      <Select
-        value={activeRole}
-        onChange={(event) => {
-          const role = event.target.value as Role;
-          setActiveRole(role);
-          void navigate(homePath(role));
-        }}
-        inputProps={{ 'aria-label': texts.session.roleSwitcher, 'data-testid': 'role-switcher' }}
-        sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'inherit', '& .MuiSvgIcon-root': { color: 'inherit' } }}
+    <>
+      <ButtonBase
+        sx={{ ...pillSx, pr: '10px', '&:hover': { bgcolor: c('bg-surface-2') } }}
+        onClick={(event) => setAnchor(event.currentTarget)}
+        aria-label={`${texts.session.roleSwitcher}: ${texts.roles[activeRole]}`}
+        aria-haspopup="menu"
+        aria-expanded={anchor ? 'true' : undefined}
+        data-testid="role-switcher"
+      >
+        {texts.roles[activeRole]}
+        <ExpandMoreIcon sx={{ fontSize: 18, color: c('text-muted') }} />
+      </ButtonBase>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         {roles.map((role) => (
-          <MenuItem key={role} value={role}>
+          <MenuItem
+            key={role}
+            selected={role === activeRole}
+            onClick={() => {
+              setAnchor(null);
+              if (role === activeRole) return;
+              setActiveRole(role);
+              void navigate(homePath(role));
+            }}
+          >
             {texts.roles[role]}
           </MenuItem>
         ))}
-      </Select>
-    </FormControl>
+      </Menu>
+    </>
   );
 }

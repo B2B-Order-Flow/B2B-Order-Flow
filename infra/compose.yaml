@@ -17,9 +17,14 @@ services:
       CORE_DB_MIGRATION_PASSWORD: ${CORE_DB_MIGRATION_PASSWORD:?задай CORE_DB_MIGRATION_PASSWORD в .env}
       CORE_DB_APP_USER: ${CORE_DB_APP_USER:?задай CORE_DB_APP_USER в .env}
       CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?задай CORE_DB_APP_PASSWORD в .env}
+      CORE_DB_BACKUP_USER: ${CORE_DB_BACKUP_USER:?задай CORE_DB_BACKUP_USER в .env}
+      CORE_DB_BACKUP_PASSWORD: ${CORE_DB_BACKUP_PASSWORD:?задай CORE_DB_BACKUP_PASSWORD в .env}
     volumes:
       - core-db-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - default
+      - backup
     healthcheck:
       # -h 127.0.0.1: пока идёт инициализация (скрипты в initdb.d), временный сервер слушает
       # только сокет, и проверка без -h сообщила бы «готов» раньше, чем созданы роли
@@ -27,6 +32,27 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
+    depends_on:
+      core-db:
+        condition: service_healthy
+    environment:
+      PGHOST: core-db
+      PGDATABASE: ${CORE_DB_NAME:?задай CORE_DB_NAME в .env}
+      PGUSER: ${CORE_DB_BACKUP_USER:?задай CORE_DB_BACKUP_USER в .env}
+      PGPASSWORD: ${CORE_DB_BACKUP_PASSWORD:?задай CORE_DB_BACKUP_PASSWORD в .env}
+      BACKUP_CRON: ${BACKUP_CRON:-0 3 * * *}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - core-backups:/backups
+      - ./backup/entrypoint.sh:/entrypoint.sh:ro
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+    networks:
+      - backup
 
   mock-crm:
     image: wiremock/wiremock:3.13.2
@@ -108,5 +134,33 @@ services:
       retries: 6
       start_period: 10s
 
+  nginx:
+    build:
+      context: ../ui
+    restart: unless-stopped
+    # Открытые WebSocket не дают Nginx остановиться сразу, Docker по умолчанию ждёт 10 с
+    stop_grace_period: 5s
+    depends_on:
+      bff-gateway:
+        condition: service_healthy
+    environment:
+      RATE_API: ${RATE_API:-100}
+      RATE_LOGIN: ${RATE_LOGIN:-10}
+      NGINX_ENVSUBST_FILTER: ^RATE_
+    ports:
+      # Наружу открыт только Nginx (docs/system/nfr.md, раздел 8)
+      - "127.0.0.1:${HTTP_PORT:-80}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
 volumes:
   core-db-data:
+  core-backups:
+
+networks:
+  backup:
+    internal: true

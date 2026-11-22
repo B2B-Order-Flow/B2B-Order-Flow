@@ -110,7 +110,7 @@ create table sla_pause (
     timer_id        uuid not null references sla_timer (id) on delete restrict,
     reason_code     text not null references pause_reason (code) on delete restrict,
     set_by          text not null,
-    comment         text not null,
+    comment         text,
     started_at      timestamptz not null,
     ended_at        timestamptz,
     limit_at        timestamptz not null,
@@ -118,7 +118,7 @@ create table sla_pause (
     extended_by     uuid references app_user (id) on delete restrict,
     created_at      timestamptz not null default now(),
     constraint ck_sla_pause_set_by check (set_by = 'SYSTEM' or set_by ~ '^[0-9a-fA-F-]{36}$'),
-    constraint ck_sla_pause_comment check (char_length(comment) between 1 and 4000),
+    constraint ck_sla_pause_comment check (comment is null or char_length(comment) between 1 and 4000),
     constraint ck_sla_pause_extended_count check (extended_count >= 0),
     constraint ck_sla_pause_dates check (ended_at is null or ended_at >= started_at)
 );
@@ -195,6 +195,7 @@ insert into sla_norm (profile, kind, stage_type, norm_minutes, warn_before_minut
     ('PROD', 'STAGE_SLA', 'PROCUREMENT_APPROVAL', 1440, 360, 'WORK'),
     ('PROD', 'STAGE_SLA', 'MGMT_APPROVAL', 960, 240, 'WORK'),
     ('PROD', 'STAGE_SLA', 'CONTRACT_SIGNING', 960, 240, 'WORK'),
+    -- Fallback only: actual construction duration comes from request.construction_days.
     ('PROD', 'STAGE_SLA', 'CONSTRUCTION', 43200, 10800, 'CALENDAR'),
     ('PROD', 'STAGE_SLA', 'INSTALLATION', 2400, 600, 'WORK'),
     ('PROD', 'STAGE_SLA', 'ACTIVATION', 480, 120, 'WORK'),
@@ -215,12 +216,12 @@ insert into sla_norm (profile, kind, stage_type, norm_minutes, warn_before_minut
     ('PROD', 'DATA_CHECK', null, 240, 60, 'WORK'),
     ('PROD', 'MANAGER_ASSIGNMENT', null, 240, 60, 'WORK'),
     ('PROD', 'TECH_RESULT', null, 43200, 7200, 'CALENDAR'),
-    ('PROD', 'ACCEPTANCE', null, 2400, 960, 'WORK'),
+    ('PROD', 'ACCEPTANCE', null, 2400, 1440, 'WORK'),
     ('PROD', 'CANCEL_RESPONSE', null, 4800, 960, 'WORK'),
     ('DEMO', 'DATA_CHECK', null, 3, 1, 'WORK'),
     ('DEMO', 'MANAGER_ASSIGNMENT', null, 2, 1, 'WORK'),
     ('DEMO', 'TECH_RESULT', null, 12, 2, 'CALENDAR'),
-    ('DEMO', 'ACCEPTANCE', null, 3, 1, 'WORK'),
+    ('DEMO', 'ACCEPTANCE', null, 3, 2, 'WORK'),
     ('DEMO', 'CANCEL_RESPONSE', null, 4, 1, 'WORK');
 
 insert into work_calendar (calendar_date, is_working, note)

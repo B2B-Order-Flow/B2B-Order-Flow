@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { configureApi } from '../api/client';
 import { authApi, queryKeys } from '../api/endpoints';
 import type { CompanyBrief, LoginRequest, Role, UserView } from '../api/types';
@@ -30,6 +30,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(() => sessionStore.getToken());
   const [storedRole, setStoredRole] = useState<Role | null>(() => sessionStore.getActiveRole());
+  const logoutRef = useRef<(reason?: 'expired') => void>(() => undefined);
+
+  // Слой запросов читает токен и роль напрямую из хранилища, а о 401 и отозванной роли сообщает сюда.
+  // Настраивается сразу при первом рендере: запрос /me после перезагрузки страницы стартует раньше
+  // эффектов этого компонента и без настройки ушёл бы без токена (401 и выход из системы).
+  useState(() =>
+    configureApi({
+      getToken: () => sessionStore.getToken(),
+      getActiveRole: () => sessionStore.getActiveRole(),
+      onUnauthorized: () => logoutRef.current('expired'),
+      onAccessDenied: () => void queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+    }),
+  );
 
   const meQuery = useQuery({
     queryKey: queryKeys.me,
@@ -60,15 +73,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
-  // Слой запросов читает токен и роль напрямую из хранилища, а о 401 и отозванной роли сообщает сюда
   useEffect(() => {
-    configureApi({
-      getToken: () => sessionStore.getToken(),
-      getActiveRole: () => sessionStore.getActiveRole(),
-      onUnauthorized: () => logout('expired'),
-      onAccessDenied: () => void queryClient.invalidateQueries({ queryKey: queryKeys.me }),
-    });
-  }, [logout, queryClient]);
+    logoutRef.current = logout;
+  }, [logout]);
 
   const login = useCallback(
     async (credentials: LoginRequest) => {

@@ -82,7 +82,7 @@ docker compose --env-file .env -f infra/compose.yaml up -d --build
 docker compose --env-file .env -f infra/compose.yaml ps
 ```
 
-Все контейнеры должны перейти в состояние `healthy`. Файл `.env` в git не попадает.
+Все контейнеры должны перейти в состояние `healthy`, после этого интерфейс открывается на `http://localhost` (если порт 80 занят, задайте `HTTP_PORT` в `.env`). Файл `.env` в git не попадает.
 
 <details>
 <summary>Моки на localhost, проверка и остановка</summary>
@@ -122,9 +122,9 @@ curl -H "X-Correlation-Id: test-1" "http://localhost:8081/crm/v1/customers?inn=7
 |---|---|
 | [`bff-gateway/`](bff-gateway) | Шлюз для интерфейса (FastAPI) |
 | [`core-service/`](core-service) | Ядро (Spring Boot) |
-| [`ui/`](ui) | Веб-интерфейс (React) |
+| [`ui/`](ui) | Веб-интерфейс (React) и конфигурация Nginx |
 | [`mocks/`](mocks) | Моки внешних систем (WireMock) |
-| [`infra/`](infra) | Docker Compose, скрипты БД (Nginx добавится позже) |
+| [`infra/`](infra) | Docker Compose, скрипты БД |
 | [`tests/e2e/`](tests/e2e) | Тесты на Playwright: фикстуры, контрактные тесты моков, заготовки сквозных сценариев |
 | [`.github/workflows/`](.github/workflows) | CI в GitHub Actions |
 
@@ -165,7 +165,7 @@ curl -H "X-Correlation-Id: test-1" "http://localhost:8081/crm/v1/customers?inn=7
 | 5. Неделя устойчивости | 11.01 – 22.01 | |
 | 6. Защита | 23.01 – 29.01 | |
 
-Готово: документация, каркас репозитория, Docker Compose с PostgreSQL, тремя моками, ядром и BFF. В работе: интерфейс, вторая неделя разработки.
+Готово: документация, каркас репозитория, Docker Compose с PostgreSQL, тремя моками, ядром, BFF и Nginx. В работе: интерфейс, вторая неделя разработки.
 
 ## Участие в разработке
 

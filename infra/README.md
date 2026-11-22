@@ -1,6 +1,6 @@
 # infra
 
-Docker Compose и скрипты инициализации БД. Конфигурация Nginx и резервное копирование появятся позже. Workflow GitHub Actions лежат в `.github/workflows/` в корне репозитория.
+Docker Compose и скрипты инициализации БД. Конфигурация Nginx лежит рядом с интерфейсом, в `ui/nginx/`. Резервное копирование появится позже. Workflow GitHub Actions лежат в `.github/workflows/` в корне репозитория.
 
 Владелец: Салават.
 
@@ -12,8 +12,9 @@ Docker Compose и скрипты инициализации БД. Конфигу
 | `mock-crm`, `mock-billing`, `mock-registry` | WireMock, описание в `mocks/README.md`. Порты наружу не открыты |
 | `core-service` | Ядро (Spring Boot, Java 21), образ собирается из `core-service/Dockerfile`. Порт наружу не открыт |
 | `bff-gateway` | BFF (FastAPI), образ собирается из `bff-gateway/Dockerfile`. Порт наружу не открыт |
+| `nginx` | Единая точка входа: раздаёт интерфейс, проксирует `/api` и `/ws` в шлюз, ограничивает частоту запросов. Образ собирается из `ui/Dockerfile`. Наружу открыт только он: `127.0.0.1:80` |
 
-Nginx и UI добавятся отдельными PR, когда у сервисов появятся образы.
+После запуска интерфейс открывается на `http://localhost`. Если порт 80 занят, задай в `.env` другой, например `HTTP_PORT=8081`.
 
 ## Запуск
 
@@ -35,14 +36,27 @@ docker compose --env-file .env -f infra/compose.yaml -f infra/compose.mocks-port
 
 Порты: CRM `8081`, биллинг `8082`, справочник `8083`, только на `127.0.0.1`.
 
-Шлюз на localhost (для сквозных тестов с хоста) и профиль DEMO подключаются своими файлами:
+Шлюз на localhost (для отладки в обход Nginx) и профиль DEMO подключаются своими файлами:
 
 ```
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.app-ports.yaml up -d
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.demo.yaml up -d
 ```
 
-Шлюз открывается на `127.0.0.1:8000`. Профиль DEMO задаёт для ядра `SLA_PROFILE=DEMO` (нормативы SLA в минутах). Первая сборка ядра долгая: Maven скачивает зависимости.
+Шлюз открывается на `127.0.0.1:8000`. Профиль DEMO задаёт для ядра `SLA_PROFILE=DEMO` (нормативы SLA в минутах). Первая сборка ядра и интерфейса долгая: Maven и npm скачивают зависимости.
+
+## Nginx
+
+Конфигурация лежит в `ui/nginx/default.conf.template`. Что она делает:
+
+- раздаёт собранный интерфейс, неизвестные адреса отдаёт как `index.html` (маршруты React);
+- проксирует `/api/` и `/ws` в шлюз; при остановленном шлюзе отвечает `502` и показывает страницу `50x.html`;
+- ограничивает тело запроса (1 МБ, для вложений 11 МБ) и частоту запросов с одного адреса: 100 в минуту на `/api`, 10 в минуту на вход, при превышении `429`;
+- пишет по одной строке JSON на запрос в stdout, в ней есть `correlationId`.
+
+Лимиты задают переменные `RATE_API` и `RATE_LOGIN`. В профиле DEMO они подняты до 6000 и 600, иначе сквозные тесты и сид упираются в лимит с одного адреса. Логи: `docker compose --env-file .env -f infra/compose.yaml logs nginx`, по `correlationId` запрос можно найти и в логах шлюза и ядра.
+
+Версия Nginx закреплена на ветке `1.30` образа `nginxinc/nginx-unprivileged`, где выходят исправления безопасности. Обновить образ: `docker compose --env-file .env -f infra/compose.yaml build --pull nginx`. HTTP/2 и TLS на стенде не включены.
 
 ## База данных
 

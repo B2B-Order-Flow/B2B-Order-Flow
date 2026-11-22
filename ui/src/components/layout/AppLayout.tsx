@@ -1,122 +1,78 @@
-import LogoutIcon from '@mui/icons-material/Logout';
-import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
-import Alert from '@mui/material/Alert';
-import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import Drawer from '@mui/material/Drawer';
-import IconButton from '@mui/material/IconButton';
-import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import Stack from '@mui/material/Stack';
-import Toolbar from '@mui/material/Toolbar';
-import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import ButtonBase from '@mui/material/ButtonBase';
 import { Link as RouterLink, NavLink, Outlet } from 'react-router';
-import { canAccess, homePath, isCompanyRole, menuFor, routeAccess } from '../../session/roles';
+import { homePath, isCompanyRole, menuFor } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
+import { c, CONTENT_WIDTH, radius, textStyles } from '../../theme/tokens';
+import { Brand } from '../ui/Brand';
+import { Notice } from '../ui/Notice';
 import { RoleSwitcher } from './RoleSwitcher';
+import { UserMenu } from './UserMenu';
 
-const DRAWER_WIDTH = 232;
+/** Ширина содержимого 1200 px и поля по бокам, как в макете 1440 px. */
+export const contentBoxSx = { width: '100%', maxWidth: CONTENT_WIDTH + 48, mx: 'auto', px: '24px' } as const;
 
-// Каркас приложения: шапка и меню по активной роли (ui-requirements.md §3.1–3.2).
+// Каркас по макетам: шапка 68 px — логотип, меню-«таблетки», роль, аватар (ui-requirements.md §3.1–3.2).
 export function AppLayout() {
-  const { user, company, activeRole, logout } = useSession();
+  const { company, activeRole } = useSession();
   const menu = menuFor(activeRole);
-  const showCompany = company && (activeRole === null || isCompanyRole(activeRole));
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar sx={{ gap: 2 }}>
-          <Typography
-            variant="h6"
+    <Box sx={{ minHeight: '100vh', bgcolor: c('bg-page') }}>
+      <Box
+        component="header"
+        sx={{ height: 68, bgcolor: c('bg-surface'), borderBottom: `1px solid ${c('border-default')}` }}
+      >
+        <Box sx={{ ...contentBoxSx, height: '100%', display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <ButtonBase
             component={RouterLink}
             to={homePath(activeRole)}
-            sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 700, flexShrink: 0 }}
+            aria-label={texts.app.home}
+            sx={{ borderRadius: `${radius.sm}px` }}
           >
-            {texts.app.name}
-          </Typography>
+            <Brand />
+          </ButtonBase>
 
-          {showCompany ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="header-company">
-              <Typography variant="body2">{company.name}</Typography>
-              {company.status !== 'ACTIVE' ? (
-                <Chip
-                  size="small"
-                  color={company.status === 'PENDING' ? 'warning' : 'error'}
-                  label={texts.companyStatus[company.status]}
-                />
-              ) : null}
-            </Stack>
-          ) : null}
-
-          <Box sx={{ flexGrow: 1 }} />
+          <Box component="nav" data-testid="main-menu" sx={{ display: 'flex', gap: '4px', flex: 1, minWidth: 0 }}>
+            {menu.map((item) => (
+              <ButtonBase
+                key={item.path}
+                component={NavLink}
+                to={item.path}
+                end
+                sx={{
+                  ...textStyles.body,
+                  px: '14px',
+                  py: '8px',
+                  borderRadius: `${radius.full}px`,
+                  color: c('text-primary'),
+                  whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: c('bg-surface-2') },
+                  '&.active': {
+                    ...textStyles.accent,
+                    bgcolor: c('action-primary-soft'),
+                    color: c('action-primary-text'),
+                  },
+                }}
+              >
+                {item.label}
+              </ButtonBase>
+            ))}
+          </Box>
 
           <RoleSwitcher />
+          <UserMenu />
+        </Box>
+      </Box>
 
-          {canAccess(routeAccess.notifications, activeRole) ? (
-            <Tooltip title={texts.menu.notifications}>
-              <IconButton
-                color="inherit"
-                component={RouterLink}
-                to="/notifications"
-                aria-label={texts.menu.notifications}
-                data-testid="header-notifications"
-              >
-                <NotificationsNoneIcon />
-              </IconButton>
-            </Tooltip>
-          ) : null}
-
-          <Stack sx={{ textAlign: 'right' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-              {user?.fullName}
-            </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.8, lineHeight: 1.2 }}>
-              {user?.login}
-            </Typography>
-          </Stack>
-          <Tooltip title={texts.session.logout}>
-            <IconButton color="inherit" onClick={() => logout()} aria-label={texts.session.logout} data-testid="logout">
-              <LogoutIcon />
-            </IconButton>
-          </Tooltip>
-        </Toolbar>
-      </AppBar>
-
-      <Drawer
-        variant="permanent"
-        sx={{
-          width: DRAWER_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
-        }}
-      >
-        <Toolbar />
-        <List component="nav" data-testid="main-menu">
-          {menu.map((item) => (
-            <ListItemButton
-              key={item.path}
-              component={NavLink}
-              to={item.path}
-              end
-              sx={{ '&.active': { bgcolor: 'action.selected', fontWeight: 600 } }}
-            >
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          ))}
-        </List>
-      </Drawer>
-
-      <Box component="main" sx={{ flexGrow: 1, p: 3, minWidth: 0 }}>
-        <Toolbar />
+      <Box component="main" sx={contentBoxSx}>
         {company?.status === 'PENDING' && isCompanyRole(activeRole) ? (
-          <Alert severity="warning" sx={{ mb: 2 }} data-testid="company-pending">
-            {texts.session.companyPending}
-          </Alert>
+          <Box sx={{ pt: '24px' }}>
+            <Notice tone="waiting" testId="company-pending">
+              {texts.session.companyPending}
+            </Notice>
+          </Box>
         ) : null}
         <Outlet />
       </Box>
