@@ -53,7 +53,12 @@ public class NotificationService {
     /** Автор заявки и её менеджер — обычный набор получателей события заявки. */
     @Transactional
     public void notifyAuthorAndManager(Request request, String eventType) {
-        notifyUsers(authorAndManager(request), request, eventType, Map.of());
+        notifyAuthorAndManager(request, eventType, Map.of());
+    }
+
+    @Transactional
+    public void notifyAuthorAndManager(Request request, String eventType, Map<String, Object> payload) {
+        notifyUsers(authorAndManager(request), request, eventType, payload);
     }
 
     /** Очередь роли: все активные сотрудники оператора с этой ролью. */

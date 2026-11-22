@@ -431,7 +431,7 @@ public class StageService {
                 previousStatus, RequestStatus.REJECTED.name(), null, Map.of("transition", "T05"));
         notificationService.notifyUsers(notificationService.authorAndManager(request), request,
                 NotificationEvent.TECH_RESULT_NONE,
-                Map.of("reasonCode", reasonCode));
+                Map.of("reasonCode", reasonCode, "status", RequestStatus.REJECTED.name()));
     }
 
     private StageView acceptByTechResult(RequestStage stage, Request request, CurrentUser actor,

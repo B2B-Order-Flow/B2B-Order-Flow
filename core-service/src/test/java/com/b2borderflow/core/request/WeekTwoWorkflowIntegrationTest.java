@@ -50,6 +50,10 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
                 .contains("REQUEST_COMMERCIAL_TERMS_SET", "REQUEST_STATUS_CHANGED");
         assertThat(notificationTypes(flow.requestId()))
                 .contains("STAGE_QUEUED", "STATUS_CHANGED");
+        assertThat(jdbc.queryForObject(
+                "select payload->>'status' from notification where request_id = ? "
+                        + "and event_type = 'STATUS_CHANGED' limit 1",
+                String.class, flow.requestId())).isEqualTo("TECH_CHECK");
     }
 
     @Test
@@ -70,6 +74,7 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(claimed.status()).isEqualTo(200);
         assertThat(claimed.body().get("status")).isEqualTo("IN_PROGRESS");
         assertThat(claimed.body().get("assigneeId")).isEqualTo(flow.techId().toString());
+        assertThat(claimed.body().get("assigneeName")).isEqualTo("Павел Орлов");
 
         ApiResponse result = post("/internal/v1/stages/" + stageId + "/tech-result",
                 techToken, Role.TECH_SPECIALIST,
@@ -133,6 +138,14 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(card.body().get("techRejectReasonCode")).isEqualTo("OTHER");
         assertThat(card.body().get("techRejectReason")).isEqualTo("Нет технической возможности");
         assertThat(notificationTypes(flow.requestId())).contains("TECH_RESULT_NONE");
+        assertThat(jdbc.queryForObject(
+                "select payload->>'status' from notification where request_id = ? "
+                        + "and event_type = 'TECH_RESULT_NONE' limit 1",
+                String.class, flow.requestId())).isEqualTo("REJECTED");
+        assertThat(jdbc.queryForObject(
+                "select payload->>'reasonCode' from notification where request_id = ? "
+                        + "and event_type = 'TECH_RESULT_NONE' limit 1",
+                String.class, flow.requestId())).isEqualTo("OTHER");
 
         assertThat(jdbc.queryForObject(
                 "select status from sla_timer where stage_id = ?", String.class, stageId))
@@ -316,6 +329,13 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(accepted.body().get("commitmentLevel")).isEqualTo(1);
         assertThat(accepted.body().get("contractConcludedAt")).isNotNull();
         assertThat(stageTypeStatuses(accepted)).containsEntry("INSTALLATION", "QUEUED");
+
+        Map<String, Object> clientStage = stageOfType(accepted, "INSTALLATION");
+        assertThat(clientStage.get("queueRole")).isNull();
+        assertThat(clientStage.get("assigneeId")).isNull();
+        assertThat(clientStage.get("assigneeName")).isNull();
+        assertThat(clientStage.get("needsReassignment")).isEqualTo(false);
+        assertThat((List<?>) clientStage.get("requiredByRules")).isEmpty();
 
         ApiResponse duplicate = post("/internal/v1/requests/" + flow.requestId() + "/contract/accept-offer",
                 flow.clientToken(), Role.CLIENT_OWNER,
