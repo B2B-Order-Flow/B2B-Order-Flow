@@ -71,6 +71,10 @@ public class StageSlaService {
                     java.util.List.of(new Violation("comment", "REQUIRED", "Комментарий обязателен")));
         }
         PauseReasonCode reason = manualReason(payload.getReasonCode());
+        SlaTimer timer = activeTimer(stage);
+        if (timerService.activePause(timer.getId()).isPresent()) {
+            throw ApiException.illegalTransition("На этапе уже есть активная пауза SLA");
+        }
 
         SlaPause pause = timerService.pause(stage, reason, payload.getComment(), actor.id(), null);
         if (pause == null) {
@@ -90,6 +94,7 @@ public class StageSlaService {
         requireVersion(stage, expectedVersion);
         requireActive(stage);
         SlaTimer timer = activeTimer(stage);
+        requireManualPause(timer);
         if (!timerService.resume(timer)) {
             throw ApiException.illegalTransition("На этапе нет активной паузы SLA");
         }
@@ -110,6 +115,7 @@ public class StageSlaService {
                     java.util.List.of(new Violation("comment", "REQUIRED", "Комментарий обязателен")));
         }
         SlaTimer timer = activeTimer(stage);
+        requireManualPause(timer);
         if (!timerService.extendPause(timer, actor.id())) {
             throw ApiException.illegalTransition("На этапе нет активной паузы SLA");
         }
@@ -123,6 +129,15 @@ public class StageSlaService {
         return timerRepository.findFirstByStageIdAndStatusIn(
                         stage.getId(), EnumSet.of(SlaTimerStatus.RUNNING, SlaTimerStatus.PAUSED))
                 .orElseThrow(() -> ApiException.illegalTransition("У этапа нет активного таймера SLA"));
+    }
+
+    private void requireManualPause(SlaTimer timer) {
+        SlaPause pause = timerService.activePause(timer.getId())
+                .orElseThrow(() -> ApiException.illegalTransition("На этапе нет активной паузы SLA"));
+        if (!pause.getReasonCode().isManualByCoordinator()) {
+            throw new ApiException(ErrorCode.PAUSE_REASON_INVALID,
+                    "Автоматическую паузу снимают только переходы, а не координатор");
+        }
     }
 
     private RequestStage loadStage(UUID stageId) {

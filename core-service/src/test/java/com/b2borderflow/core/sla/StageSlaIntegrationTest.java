@@ -59,6 +59,26 @@ class StageSlaIntegrationTest extends WeekTwoApiSupport {
     }
 
     @Test
+    void automaticPauseCannotBeResumedByCoordinator() {
+        Flow flow = bootstrapWithManager("SMB");
+        UUID stageId = techCheckStage(flow);
+        UUID timerId = jdbc.queryForObject(
+                "select id from sla_timer where stage_id = ?", UUID.class, stageId);
+        jdbc.update("""
+                        insert into sla_pause
+                            (timer_id, reason_code, set_by, comment, started_at, limit_at, extended_count)
+                        values (?, 'AWAIT_CLIENT_SIGNATURE', 'SYSTEM', null, now(), now() + interval '1 day', 0)
+                        """, timerId);
+        jdbc.update("update sla_timer set status = 'PAUSED' where id = ?", timerId);
+
+        ApiResponse response = post("/internal/v1/stages/" + stageId + "/sla/resume",
+                flow.coordinatorToken(), Role.COORDINATOR, Map.of("version", 0));
+
+        assertStatus(response, 422);
+        assertThat(response.body().get("code")).isEqualTo("PAUSE_REASON_INVALID");
+    }
+
+    @Test
     void automaticReasonAndNonCoordinatorAreRejected() {
         Flow flow = bootstrapWithManager("SMB");
         UUID stageId = techCheckStage(flow);
