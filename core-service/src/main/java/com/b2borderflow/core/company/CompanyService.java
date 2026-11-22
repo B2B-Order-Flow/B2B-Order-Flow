@@ -14,12 +14,17 @@ import com.b2borderflow.core.error.Violation;
 import com.b2borderflow.core.idempotency.IdempotencyService;
 import com.b2borderflow.core.integration.ExternalCallResult;
 import com.b2borderflow.core.integration.RegistryClient;
+import com.b2borderflow.core.notification.NotificationEvent;
+import com.b2borderflow.core.notification.NotificationService;
 import com.b2borderflow.core.security.CurrentUser;
 import com.b2borderflow.core.security.CurrentUserProvider;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -49,6 +54,7 @@ public class CompanyService {
     private final CompanyMapper companyMapper;
     private final CurrentUserProvider currentUserProvider;
     private final AuditService auditService;
+    private final NotificationService notificationService;
     private final InnValidator innValidator;
     private final RegistryClient registryClient;
     private final IdempotencyService idempotencyService;
@@ -61,6 +67,7 @@ public class CompanyService {
                           CompanyMapper companyMapper,
                           CurrentUserProvider currentUserProvider,
                           AuditService auditService,
+                          NotificationService notificationService,
                           InnValidator innValidator,
                           RegistryClient registryClient,
                           IdempotencyService idempotencyService,
@@ -72,6 +79,7 @@ public class CompanyService {
         this.companyMapper = companyMapper;
         this.currentUserProvider = currentUserProvider;
         this.auditService = auditService;
+        this.notificationService = notificationService;
         this.innValidator = innValidator;
         this.registryClient = registryClient;
         this.idempotencyService = idempotencyService;
@@ -221,6 +229,8 @@ public class CompanyService {
         auditService.record(actor, saved.getId(), null, AuditAction.COMPANY_CONFIRMED,
                 "COMPANY", saved.getId(), CompanyStatus.PENDING.name(), saved.getStatus().name(),
                 request == null ? null : request.getComment(), null);
+        notificationService.notifyCompanyUsers(companyRepresentatives(saved.getId()), saved.getId(),
+                NotificationEvent.COMPANY_CONFIRMED, Map.of());
 
         return companyMapper.toView(saved);
     }
@@ -249,6 +259,8 @@ public class CompanyService {
         auditService.record(actor, saved.getId(), null, AuditAction.COMPANY_REJECTED,
                 "COMPANY", saved.getId(), CompanyStatus.PENDING.name(), saved.getStatus().name(),
                 reason.trim(), null);
+        notificationService.notifyCompanyUsers(companyRepresentatives(saved.getId()), saved.getId(),
+                NotificationEvent.COMPANY_REJECTED, Map.of("reason", reason.trim()));
 
         return companyMapper.toView(saved);
     }
@@ -257,6 +269,34 @@ public class CompanyService {
         if (company.getStatus() != CompanyStatus.PENDING) {
             throw ApiException.illegalTransition("Компания уже рассмотрена");
         }
+    }
+
+    /**
+     * Представитель компании для уведомления — владелец (CLIENT_OWNER).
+     * Если владельца в данных нет, не теряем событие и пишем всем участникам.
+     */
+    private Set<UUID> companyRepresentatives(UUID companyId) {
+        List<CompanyMembership> memberships = membershipRepository
+                .findByCompanyIdInAndRemovedAtIsNull(List.of(companyId));
+        if (memberships.isEmpty()) {
+            return Set.of();
+        }
+        Map<UUID, UUID> membershipUsers = new HashMap<>();
+        for (CompanyMembership membership : memberships) {
+            membershipUsers.put(membership.getId(), membership.getUserId());
+        }
+        List<MembershipRole> roles = membershipRoleRepository
+                .findByIdMembershipIdIn(membershipUsers.keySet());
+        Set<UUID> owners = new LinkedHashSet<>();
+        for (MembershipRole role : roles) {
+            if (role.getId().getRole() == Role.CLIENT_OWNER) {
+                UUID userId = membershipUsers.get(role.getId().getMembershipId());
+                if (userId != null) {
+                    owners.add(userId);
+                }
+            }
+        }
+        return owners.isEmpty() ? new LinkedHashSet<>(membershipUsers.values()) : owners;
     }
 
     private static Pageable pageable(int page, int size, String sort) {

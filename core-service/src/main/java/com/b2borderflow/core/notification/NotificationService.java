@@ -59,6 +59,26 @@ public class NotificationService {
         this.clock = clock;
     }
 
+    /** Уведомления компании: создаются без заявки, в payload обязателен companyId. */
+    @Transactional
+    public void notifyCompanyUsers(Collection<UUID> recipients, UUID companyId,
+                                   String eventType, Map<String, Object> payload) {
+        Set<UUID> distinct = new LinkedHashSet<>();
+        recipients.stream().filter(java.util.Objects::nonNull).forEach(distinct::add);
+        Map<String, Object> body = new java.util.HashMap<>(payload == null ? Map.of() : payload);
+        body.put("companyId", companyId.toString());
+        List<Notification> created = new java.util.ArrayList<>();
+        for (UUID recipient : distinct) {
+            Notification notification = new Notification();
+            notification.setRecipientUserId(recipient);
+            notification.setRequestId(null);
+            notification.setEventType(eventType);
+            notification.setPayload(Map.copyOf(body));
+            created.add(notificationRepository.save(notification));
+        }
+        eventStreamService.publishAfterCommit(created);
+    }
+
     @Transactional
     public void notifyUsers(Collection<UUID> recipients, Request request, String eventType,
                             Map<String, Object> payload) {

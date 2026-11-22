@@ -6,6 +6,8 @@ services:
   core-service:
     environment:
       SLA_PROFILE: DEMO
+      # DEMO-таймеры идут в минутах/секундах; 5 секунд — верхняя граница из sla.md, §9.
+      SLA_SCHEDULER_DELAY_MS: "5000"
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/demo
 
   nginx:

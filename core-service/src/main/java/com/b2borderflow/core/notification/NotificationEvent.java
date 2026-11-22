@@ -22,6 +22,8 @@ public final class NotificationEvent {
     public static final String CONTROL_DEADLINE_WARNING = "CONTROL_DEADLINE_WARNING";
     public static final String CONTROL_DEADLINE_BREACH = "CONTROL_DEADLINE_BREACH";
     public static final String ACCEPTANCE_REMINDER = "ACCEPTANCE_REMINDER";
+    public static final String COMPANY_CONFIRMED = "COMPANY_CONFIRMED";
+    public static final String COMPANY_REJECTED = "COMPANY_REJECTED";
 
     private NotificationEvent() {
     }
