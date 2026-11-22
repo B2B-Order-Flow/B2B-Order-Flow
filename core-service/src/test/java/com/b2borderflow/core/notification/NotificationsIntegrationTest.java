@@ -2,6 +2,7 @@ package com.b2borderflow.core.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.b2borderflow.core.company.CompanyStatus;
 import com.b2borderflow.core.domain.Role;
 import com.b2borderflow.core.support.WeekTwoApiSupport;
 import java.util.List;
@@ -62,6 +63,31 @@ class NotificationsIntegrationTest extends WeekTwoApiSupport {
         assertThat(remaining)
                 .extracting(item -> item.get("id"))
                 .doesNotContain(notificationId.toString());
+    }
+
+    @Test
+    void companyNotificationWithoutRequestIdIsReturned() {
+        var owner = createUser("owner", "Владелец компании");
+        var company = createCompany("ООО «Вектор»", "7811001128", CompanyStatus.PENDING, owner);
+        createUser("admin", "Администратор", Role.ADMIN);
+        String adminToken = login("admin");
+        assertStatus(post("/internal/v1/admin/companies/" + company.getId() + "/confirm",
+                adminToken, Role.ADMIN, Map.of("comment", "Реквизиты сверены")), 200);
+
+        String ownerToken = login("owner");
+        ApiResponse unread = get("/internal/v1/notifications?unread=true&size=1",
+                ownerToken, Role.CLIENT_OWNER);
+
+        assertStatus(unread, 200);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) unread.body().get("content");
+        assertThat(content).hasSize(1);
+        assertThat(content.get(0).get("eventType")).isEqualTo("COMPANY_CONFIRMED");
+        assertThat(content.get(0).get("requestId")).isNull();
+        assertThat(content.get(0).get("requestNumber")).isNull();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = (Map<String, Object>) content.get(0).get("payload");
+        assertThat(payload.get("companyId")).isEqualTo(company.getId().toString());
     }
 
     @Test
