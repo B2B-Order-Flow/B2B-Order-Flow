@@ -202,6 +202,50 @@ describe('UI-14. Экран уведомлений', () => {
   });
 });
 
+describe('UI-14. Отказ в регистрации компании', () => {
+  it('владелец видит причину в списке и по клику попадает на экран компании с причиной', async () => {
+    const reason = 'ИНН не найден в справочнике';
+    const owner: UserView = {
+      id: 'u-owner',
+      login: 'owner',
+      fullName: 'Нина Ветрова',
+      email: 'owner@example.test',
+      companyRoles: ['CLIENT_OWNER'],
+      companies: [{ id: 'c-1', name: 'ООО «Вектор»', status: 'REJECTED' }],
+    };
+    const rejected = note({
+      requestId: undefined,
+      eventType: 'COMPANY_REJECTED',
+      payload: { companyId: 'c-1', reason },
+    });
+    sessionStore.setToken('jwt', 28800);
+    sessionStore.setActiveRole('CLIENT_OWNER');
+    const fetchMock = mockApi({
+      'GET /me': () => jsonResponse(200, owner),
+      'GET /notifications': () => jsonResponse(200, pageOf([rejected])),
+      'POST /notifications/n-1/read': () => new Response(null, { status: 204 }),
+      'GET /companies/c-1': () =>
+        jsonResponse(200, {
+          id: 'c-1',
+          name: 'ООО «Вектор»',
+          inn: '7701000000',
+          status: 'REJECTED',
+          rejectReason: reason,
+          createdAt: '2026-11-20T09:00:00Z',
+        }),
+    });
+    const user = userEvent.setup();
+    const { router } = renderApp('/notifications');
+
+    const row = await screen.findByTestId('notifications-row-n-1');
+    await user.click(within(row).getByText(`Компания не подтверждена. ${reason}`));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/company'));
+    expect(await screen.findByTestId('company-page')).toHaveTextContent(reason);
+    expect(posted(fetchMock, '/notifications/n-1/read')).toHaveLength(1);
+  });
+});
+
 describe('Тексты и переходы уведомлений', () => {
   const operator = { requestNumber: 'REQ-1', client: false, coordinator: false };
 
@@ -223,6 +267,14 @@ describe('Тексты и переходы уведомлений', () => {
     );
   });
 
+  it('отказ компании показывает причину, а без причины — общий текст', () => {
+    const rejected = (reason?: string) =>
+      note({ requestId: undefined, eventType: 'COMPANY_REJECTED', payload: { companyId: 'c-1', reason } });
+    expect(notificationText(rejected('ИНН не найден'), operator)).toBe('Компания не подтверждена. ИНН не найден');
+    expect(notificationText(rejected(), operator)).toBe('Компания не подтверждена');
+    expect(notificationText(rejected('   '), operator)).toBe('Компания не подтверждена');
+  });
+
   it('неизвестный код из ядра не ломает список', () => {
     const unknown = note({ eventType: 'NEW_EVENT' as NotificationView['eventType'] });
     expect(notificationText(unknown, operator)).toBe('Новое событие по заявке REQ-1');
@@ -231,7 +283,7 @@ describe('Тексты и переходы уведомлений', () => {
   it('ведёт в заявку, компанию или никуда', () => {
     expect(notificationTarget(note({}))).toBe('/requests/r-1');
     expect(notificationTarget(note({ requestId: undefined, eventType: 'COMPANY_CONFIRMED' }))).toBe('/company');
-    expect(notificationTarget(note({ requestId: undefined, eventType: 'COMPANY_REJECTED' }))).toBe('/company/new');
+    expect(notificationTarget(note({ requestId: undefined, eventType: 'COMPANY_REJECTED' }))).toBe('/company');
     expect(notificationTarget(note({ requestId: undefined, eventType: 'EXPORT_READY' }))).toBeNull();
   });
 });

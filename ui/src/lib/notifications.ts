@@ -12,8 +12,8 @@ export interface NotificationReader {
 }
 
 /**
- * Текст по notifications.md, раздел 4. В ответе ядра нет статуса, причины и комментария события,
- * поэтому в тексте их нет: подробности пользователь видит в карточке заявки.
+ * Текст по notifications.md, раздел 4. Причина есть в ответе ядра только у отказа компании. У событий заявки
+ * нет статуса, причины и комментария, поэтому подробности пользователь видит в карточке заявки.
  */
 export function notificationText(item: NotificationView, reader: NotificationReader): string {
   const stageType = item.payload?.stageType;
@@ -26,6 +26,7 @@ export function notificationText(item: NotificationView, reader: NotificationRea
     s: stageType ? ` «${texts.stageType[stageType]}»` : '',
     left: minutesLeft === undefined ? '' : formatDuration(minutesLeft, false),
     kind: item.payload?.deadlineKind,
+    reason: typeof item.payload?.reason === 'string' ? item.payload.reason.trim() : '',
     client: reader.client,
     coordinator: reader.coordinator,
   });
@@ -34,7 +35,7 @@ export function notificationText(item: NotificationView, reader: NotificationRea
 /** Куда ведёт клик (notifications.md, разделы 4 и 4.6). У экспорта экрана пока нет. */
 export function notificationTarget(item: NotificationView): string | null {
   if (item.requestId) return `/requests/${item.requestId}`;
-  if (item.eventType === 'COMPANY_CONFIRMED') return '/company';
-  if (item.eventType === 'COMPANY_REJECTED') return '/company/new';
+  // Получатель отказа — владелец: /company/new открыт только пользователю без роли, причина показана на /company
+  if (item.eventType === 'COMPANY_CONFIRMED' || item.eventType === 'COMPANY_REJECTED') return '/company';
   return null;
 }

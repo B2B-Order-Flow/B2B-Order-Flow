@@ -57,7 +57,7 @@ export function NotificationList({
               }}
             />
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant={unread ? 'subtitle2' : 'body1'} component="div">
+              <Typography variant={unread ? 'subtitle2' : 'body1'} component="div" sx={{ overflowWrap: 'anywhere' }}>
                 {notificationText(item, { ...reader, requestNumber: number })}
               </Typography>
               <Typography variant="caption" component="div" sx={{ color: c('text-muted') }}>

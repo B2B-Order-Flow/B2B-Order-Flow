@@ -413,6 +413,8 @@ export interface NotificationPayload {
   deadlineKind?: string;
   companyId?: string;
   exportId?: string;
+  /** Причина отказа: приходит у COMPANY_REJECTED через REST. */
+  reason?: string;
 }
 
 export interface NotificationView {

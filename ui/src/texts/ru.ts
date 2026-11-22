@@ -18,6 +18,7 @@ interface NotificationTextContext {
   s: string;
   left: string;
   kind?: string;
+  reason: string;
   client: boolean;
   coordinator: boolean;
 }
@@ -560,7 +561,7 @@ export const texts = {
       INTEGRATION_ERROR: ({ n }) =>
         `Заявка${n}: внешняя система недоступна, проверка данных не завершена. Запустите повторную проверку, когда система станет доступна`,
       COMPANY_CONFIRMED: () => 'Компания подтверждена',
-      COMPANY_REJECTED: () => 'Компания не подтверждена',
+      COMPANY_REJECTED: ({ reason }) => (reason ? `Компания не подтверждена. ${reason}` : 'Компания не подтверждена'),
       EXPORT_READY: () => 'Экспорт готов к скачиванию',
     } satisfies Record<NotificationEventType, (context: NotificationTextContext) => string> as Partial<
       Record<NotificationEventType, (context: NotificationTextContext) => string>
