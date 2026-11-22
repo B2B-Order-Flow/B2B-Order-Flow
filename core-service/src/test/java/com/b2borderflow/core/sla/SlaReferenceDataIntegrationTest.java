@@ -53,8 +53,25 @@ class SlaReferenceDataIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void pauseReasonsAreReadWithRoles() {
-        assertThat(pauseReasonRepository.findByActiveTrueOrderByCodeAsc())
+    void acceptanceNormUsesCorrectedWarningThresholds() {
+        assertThat(slaNormRepository.findByProfileAndKindAndStageTypeIsNull(
+                SlaProfile.PROD, SlaTimerKind.ACCEPTANCE))
+                .hasValueSatisfying(norm -> {
+                    assertThat(norm.getNormMinutes()).isEqualTo(2400);
+                    assertThat(norm.getWarnBeforeMinutes()).isEqualTo(1440);
+                    assertThat(norm.getCalendarKind()).isEqualTo(SlaCalendarKind.WORK);
+                });
+
+        assertThat(slaNormRepository.findByProfileAndKindAndStageTypeIsNull(
+                SlaProfile.DEMO, SlaTimerKind.ACCEPTANCE))
+                .hasValueSatisfying(norm -> {
+                    assertThat(norm.getNormMinutes()).isEqualTo(3);
+                    assertThat(norm.getWarnBeforeMinutes()).isEqualTo(2);
+                });
+    }
+
+    @Test
+    void pauseReasonsAreReadWithRoles() {        assertThat(pauseReasonRepository.findByActiveTrueOrderByCodeAsc())
                 .extracting(PauseReason::getCode)
                 .containsExactlyInAnyOrder(PauseReasonCode.values());
 

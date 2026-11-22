@@ -36,7 +36,6 @@ public class SlaTimerService {
     private final SlaTimerRepository timerRepository;
     private final SlaPauseRepository pauseRepository;
     private final SlaNormRepository normRepository;
-    private final PauseReasonRepository pauseReasonRepository;
     private final RequestStageRepository stageRepository;
     private final SlaCalendarFactory calendarFactory;
     private final SlaProperties properties;
@@ -45,7 +44,6 @@ public class SlaTimerService {
     public SlaTimerService(SlaTimerRepository timerRepository,
                            SlaPauseRepository pauseRepository,
                            SlaNormRepository normRepository,
-                           PauseReasonRepository pauseReasonRepository,
                            RequestStageRepository stageRepository,
                            SlaCalendarFactory calendarFactory,
                            SlaProperties properties,
@@ -53,7 +51,6 @@ public class SlaTimerService {
         this.timerRepository = timerRepository;
         this.pauseRepository = pauseRepository;
         this.normRepository = normRepository;
-        this.pauseReasonRepository = pauseReasonRepository;
         this.stageRepository = stageRepository;
         this.calendarFactory = calendarFactory;
         this.properties = properties;
@@ -140,9 +137,7 @@ public class SlaTimerService {
         pause.setTimerId(timer.getId());
         pause.setReasonCode(reasonCode);
         pause.setSetBy(actorId == null ? SlaPause.SET_BY_SYSTEM : actorId.toString());
-        pause.setComment(comment == null || comment.isBlank()
-                ? "Автопауза: " + reasonTitle(reasonCode)
-                : comment);
+        pause.setComment(comment == null || comment.isBlank() ? null : comment);
         pause.setStartedAt(now);
         pause.setLimitAt(pauseLimit);
         return pauseRepository.save(pause);
@@ -262,12 +257,6 @@ public class SlaTimerService {
         return properties.getProfile() == SlaProfile.DEMO
                 ? DEMO_PAUSE_WARNING_BEFORE
                 : PROD_PAUSE_WARNING_BEFORE;
-    }
-
-    private String reasonTitle(PauseReasonCode code) {
-        return pauseReasonRepository.findById(code)
-                .map(PauseReason::getTitle)
-                .orElse(code.name());
     }
 
     private OffsetDateTime now() {

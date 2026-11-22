@@ -38,7 +38,7 @@ public class SlaPause extends CreatedEntity {
     @Column(name = "set_by", nullable = false, updatable = false)
     private String setBy;
 
-    @Column(name = "comment", nullable = false, updatable = false)
+    @Column(name = "comment", updatable = false)
     private String comment;
 
     @Column(name = "started_at", nullable = false, updatable = false)
