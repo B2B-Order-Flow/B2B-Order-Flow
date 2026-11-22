@@ -312,6 +312,7 @@ export const texts = {
     crmManagerNone: 'нет',
     stageSla: 'Срок этапа',
     slaUnknown: 'Таймера этого этапа нет в ответе ядра',
+    slaLoadError: 'Не удалось загрузить срок этапа. Обновите страницу',
     slaTime: (time: string) => `Время по SLA: ${time}.`,
     calendarTime: (time: string) => `Календарное: ${time}.`,
     pausedNow: (reason: string) => `Сейчас пауза: ${reason}.`,

@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from './api/endpoints';
 import type { RequestView, Role, SlaView, StageView, UserView } from './api/types';
 import { contractDateBounds } from './lib/format';
 import { sessionStore } from './session/storage';
@@ -370,6 +371,25 @@ describe('Акт и закрытие (шаг 10)', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/sla'))).toBe(true));
     expect(await screen.findByTestId('action-close-by-default')).toBeDisabled();
     expect(screen.getByTestId('action-act-signed')).toBeEnabled();
+  });
+
+  it.each<[string, () => Response | Promise<Response>]>([
+    ['503', () => jsonResponse(503, { code: 'SERVICE_UNAVAILABLE', retryable: true })],
+    ['нет связи', () => Promise.reject(new TypeError('Failed to fetch'))],
+  ])('если запрос срока приёмки упал (%s), закрыть нельзя, а «Акт подписан» работает', async (_, failure) => {
+    signIn('SALES_MANAGER');
+    const { fetchMock } = managerApi(request({ status: 'ACTIVATED', actSentAt: '2026-11-20T09:00:00Z' }), {
+      'GET /requests/r-1/sla': failure,
+    });
+    const user = userEvent.setup();
+    const { queryClient } = renderApp('/requests/r-1');
+
+    await waitFor(() => expect(queryClient.getQueryState(queryKeys.sla('r-1'))?.status).toBe('error'));
+    expect(await screen.findByTestId('action-close-by-default')).toBeDisabled();
+    await user.click(screen.getByTestId('action-act-signed'));
+
+    await waitFor(() => expect(callTo(fetchMock, '/act/signed')).toBeTruthy());
+    expect(callTo(fetchMock, '/close-by-default')).toBeUndefined();
   });
 
   it('если часы разошлись и ядро ответило 409, показывает понятный текст', async () => {

@@ -69,7 +69,7 @@ export function StageSlaPanel({ stage }: { stage: StageView }) {
         <StageSla stageName={texts.stageType[stage.type]} timer={timer} />
       ) : (
         <Typography variant="body1" sx={{ color: c('text-muted') }}>
-          {t.slaUnknown}
+          {query.isError ? t.slaLoadError : t.slaUnknown}
         </Typography>
       )}
     </Panel>
