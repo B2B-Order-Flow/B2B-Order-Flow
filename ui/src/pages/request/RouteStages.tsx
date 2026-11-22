@@ -4,10 +4,8 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { useQueries } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { queryKeys, usersApi } from '../../api/endpoints';
-import type { RequestStatus, RequestView, Role, StageStatus, StageView } from '../../api/types';
+import type { RequestStatus, RequestView, StageStatus, StageView } from '../../api/types';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
 import { c, type ColorToken } from '../../theme/tokens';
@@ -27,37 +25,19 @@ const MARK: Record<StageStatus, { ring: ColorToken; fill?: boolean; icon?: React
   CANCELLED: { ring: 'border-strong' },
 };
 
-/** Имена исполнителей: список сотрудников доступен только координатору (api-contract.md §6.1). */
-function useAssigneeNames(stages: StageView[], enabled: boolean): Map<string, string> {
-  const roles = enabled
-    ? [...new Set(stages.flatMap((s) => (s.assigneeId && s.queueRole ? [s.queueRole] : [])))]
-    : ([] as Role[]);
-  return useQueries({
-    queries: roles.map((role) => ({
-      queryKey: queryKeys.usersByRole(role),
-      queryFn: () => usersApi.byRole(role),
-      retry: false,
-    })),
-    combine: (results) =>
-      new Map(results.flatMap((result) => (result.data?.content ?? []).map((u) => [u.id, u.fullName] as const))),
-  });
-}
-
-function assigneeText(stage: StageView, currentUserId: string | undefined, names: Map<string, string>): string | null {
+function assigneeText(stage: StageView, currentUserId: string | undefined): string | null {
   if (stage.needsReassignment) return t.stageReassign;
-  if (stage.assigneeId) {
-    const name = stage.assigneeId === currentUserId ? t.stageYou : (names.get(stage.assigneeId) ?? t.stageAssigned);
-    return t.stageAssignee(name);
-  }
+  if (stage.assigneeId && stage.assigneeId === currentUserId) return t.stageAssignee(t.stageYou);
+  if (stage.assigneeName) return t.stageAssignee(stage.assigneeName);
+  if (stage.assigneeId) return t.stageAssigned;
   return stage.status === 'QUEUED' ? t.stageUnassigned : null;
 }
 
 // Созданные этапы текущей версии маршрута в порядке ядра. План будущих этапов — неделя 3 (GET /requests/{id}/route).
 // Клиенту — названия и статусы; исполнитель и правила — только оператору, SLA — в отдельном блоке.
 export function RouteStages({ request, client }: { request: RequestView; client: boolean }) {
-  const { user, activeRole } = useSession();
+  const { user } = useSession();
   const stages = request.stages ?? [];
-  const names = useAssigneeNames(stages, activeRole === 'COORDINATOR');
 
   if (stages.length === 0) {
     return (
@@ -70,7 +50,7 @@ export function RouteStages({ request, client }: { request: RequestView; client:
   return (
     <>
       {stages.map((stage) => {
-        const assignee = client ? null : assigneeText(stage, user?.id, names);
+        const assignee = client ? null : assigneeText(stage, user?.id);
         const rules = client ? [] : (stage.requiredByRules ?? []);
         const mark = MARK[stage.status];
         const active = stage.status === 'IN_PROGRESS' || stage.status === 'QUEUED';

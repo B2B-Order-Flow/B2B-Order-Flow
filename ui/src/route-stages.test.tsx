@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { RequestView, Role, StageView, UserView } from './api/types';
 import { sessionStore } from './session/storage';
@@ -31,6 +31,7 @@ const stages: StageView[] = [
     status: 'IN_PROGRESS',
     queueRole: 'LAWYER',
     assigneeId: 'u-1',
+    assigneeName: 'Анна Смирнова',
     requiredByRules: ['R-01', 'R-02'],
   }),
   stage({
@@ -114,6 +115,7 @@ describe('Этапы маршрута в карточке', () => {
     expect(screen.queryByTestId('route-stage-assignee')).not.toBeInTheDocument();
     expect(screen.queryByTestId('route-stage-rules')).not.toBeInTheDocument();
     expect(legal).not.toHaveTextContent('R-01');
+    expect(legal).not.toHaveTextContent('Анна Смирнова');
   });
 
   it('оператору — исполнитель и правила маршрутизации', async () => {
@@ -125,34 +127,35 @@ describe('Этапы маршрута в карточке', () => {
     const finance = await row('FINANCE_APPROVAL');
     expect(within(finance).getByTestId('route-stage-assignee')).toHaveTextContent(t.stageUnassigned);
     const tech = await row('TECH_CHECK');
-    expect(within(tech).getByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssignee(t.stageAssigned));
+    expect(within(tech).getByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssigned);
     expect(within(tech).queryByTestId('route-stage-rules')).not.toBeInTheDocument();
   });
 
-  it('координатор видит имя исполнителя, другим ролям список сотрудников не запрашивается', async () => {
-    const orlov = { id: 'u-orlov', login: 'p.orlov', fullName: 'Павел Орлов', operatorRoles: [], active: true };
-    open('COORDINATOR', person({ operatorRoles: ['COORDINATOR'] }), request(), {
-      'GET /users': () => jsonResponse(200, { ...empty, content: [orlov] }),
-    });
-    const tech = await row('TECH_CHECK');
-    await waitFor(() =>
-      expect(within(tech).getByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssignee('Павел Орлов')),
-    );
-  });
+  it.each<[Role, UserView]>([
+    ['COORDINATOR', person({ operatorRoles: ['COORDINATOR'] })],
+    ['ENGINEER', person({ operatorRoles: ['ENGINEER'] })],
+  ])('%s видит имя исполнителя из ответа ядра, список сотрудников не запрашивается', async (role, user) => {
+    const view = request({ stages: [stage({ assigneeName: 'Павел Орлов' })] });
+    const fetchMock = open(role, user, view);
 
-  it('инженер не запрашивает список сотрудников', async () => {
-    const fetchMock = open('ENGINEER', person({ operatorRoles: ['ENGINEER'] }), request({ status: 'IN_EXECUTION' }));
-    await row('TECH_CHECK');
+    expect(await screen.findByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssignee('Павел Орлов'));
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/users'))).toBe(false);
   });
 
-  it('если список сотрудников недоступен, координатор видит, что исполнитель назначен', async () => {
-    const fetchMock = open('COORDINATOR', person({ operatorRoles: ['COORDINATOR'] }), request(), {
-      'GET /users': () => jsonResponse(503, { code: 'SERVICE_UNAVAILABLE', retryable: true }),
+  it('свой этап подписан «Вы», даже если ядро вернуло имя', async () => {
+    const view = request({
+      stages: [stage({ assigneeId: 'u-1', assigneeName: 'Анна Смирнова', status: 'IN_PROGRESS' })],
     });
-    const tech = await row('TECH_CHECK');
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/users'))).toBe(true));
-    expect(within(tech).getByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssignee(t.stageAssigned));
+    open('B2B_HEAD', person({ id: 'u-1', operatorRoles: ['B2B_HEAD'] }), view);
+
+    expect(await screen.findByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssignee(t.stageYou));
+  });
+
+  it('если имени нет, показывает «Исполнитель назначен»', async () => {
+    const fetchMock = open('COORDINATOR', person({ operatorRoles: ['COORDINATOR'] }), request({ stages: [stage({})] }));
+
+    expect(await screen.findByTestId('route-stage-assignee')).toHaveTextContent(t.stageAssigned);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/users'))).toBe(false);
   });
 
   it('показывает, что этап нужно переназначить', async () => {

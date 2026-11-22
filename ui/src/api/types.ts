@@ -322,6 +322,8 @@ export interface StageView {
   queueRole?: Role;
   /** Не отдаётся клиенту. */
   assigneeId?: string;
+  /** ФИО исполнителя для ролей оператора; не отдаётся клиенту. */
+  assigneeName?: string;
   needsReassignment?: boolean;
   /** ID правил маршрутизации, из-за которых создан этап (R-01 и т. д.). */
   requiredByRules?: string[];
