@@ -33,7 +33,7 @@ function useIsRequestManager(request: RequestView): boolean {
   return activeRole === 'SALES_MANAGER' && Boolean(user) && request.managerId === user?.id;
 }
 
-/** Срок приёмки из GET /requests/{id}/sla. Если ядро его не отдало — null, решение остаётся за ядром. */
+/** Срок приёмки из GET /requests/{id}/sla. null — срок ещё не загружен или неизвестен. */
 function useAcceptanceDue(request: RequestView, enabled: boolean): number | null {
   const query = useQuery({
     queryKey: queryKeys.sla(request.id),
@@ -48,7 +48,7 @@ function useAcceptanceDue(request: RequestView, enabled: boolean): number | null
 
 // Кнопки действий SC-01 в шапке карточки (ui-requirements.md §7.3 и §8). Видимость — по роли и статусу,
 // окончательную проверку делает ядро.
-export function WorkflowActions({ request, myStages }: { request: RequestView; myStages: StageView[] }) {
+export function WorkflowActions({ request }: { request: RequestView }) {
   const { activeRole } = useSession();
   const manager = useIsRequestManager(request);
 
@@ -57,7 +57,7 @@ export function WorkflowActions({ request, myStages }: { request: RequestView; m
   }
   if (manager && request.status === 'ACTIVATED') return <ActActions request={request} />;
   if (activeRole === 'ENGINEER' && request.status === 'IN_EXECUTION') {
-    return <EngineerActions request={request} myStages={myStages} />;
+    return <EngineerActions request={request} />;
   }
   return null;
 }
@@ -187,9 +187,11 @@ function ContractDialog({ request, onClose }: { request: RequestView; onClose: (
   );
 }
 
-function EngineerActions({ request, myStages }: { request: RequestView; myStages: StageView[] }) {
-  const mine = myStages.find(
-    (s) => s.requestId === request.id && s.status === 'IN_PROGRESS' && ENGINEER_STAGES.has(s.type),
+function EngineerActions({ request }: { request: RequestView }) {
+  const { user } = useSession();
+  // Этап ищем в маршруте самой заявки: список «Моих задач» страничный, нужного этапа на странице может не быть
+  const mine = request.stages?.find(
+    (s) => s.status === 'IN_PROGRESS' && s.assigneeId === user?.id && ENGINEER_STAGES.has(s.type),
   );
   if (mine?.type === 'INSTALLATION') return <CompleteInstallation request={request} stage={mine} />;
   if (mine?.type === 'ACTIVATION') return <ActivateService request={request} stage={mine} />;
@@ -299,7 +301,7 @@ function ActActions({ request }: { request: RequestView }) {
     t.closedByDefault,
     {
       onError: (error) => {
-        // Ядро отвечает 409, пока срок приёмки не истёк: общий текст про смену статуса здесь неверен
+        // Часы браузера и ядра могут расходиться: на 409 общий текст про смену статуса был бы неверен
         const early = isApiError(error) && error.code === 'ILLEGAL_TRANSITION';
         if (early) notify.info(t.acceptanceNotExpired);
         return early;
@@ -320,15 +322,19 @@ function ActActions({ request }: { request: RequestView }) {
     );
   }
 
-  const tooEarly = due !== null && Date.now() < due;
+  // Закрыть по умолчанию можно, только когда срок приёмки известен и наступил (ui-requirements.md §7.3).
+  // «Акт подписан» от загрузки срока не зависит
+  const dueReached = due !== null && Date.now() >= due;
+  const closeHint =
+    due === null ? t.closeDueUnknown : dueReached ? '' : t.closeAfter(dateAt(new Date(due).toISOString()));
   const busy = sign.isPending || close.isPending;
   return (
     <>
-      <Tooltip title={tooEarly ? t.closeAfter(dateAt(new Date(due).toISOString())) : ''}>
+      <Tooltip title={closeHint}>
         <span>
           <Button
             variant="outlined"
-            disabled={tooEarly || busy}
+            disabled={!dueReached || busy}
             loading={close.isPending}
             onClick={() => close.mutate(undefined)}
             data-testid="action-close-by-default"

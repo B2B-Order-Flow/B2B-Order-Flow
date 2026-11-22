@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
-import { queryKeys, requestsApi, stagesApi } from '../../api/endpoints';
+import { queryKeys, requestsApi } from '../../api/endpoints';
 import type { RequestView, StageView } from '../../api/types';
 import { ErrorState, LoadingState } from '../../components/states';
 import { Columns, Page } from '../../components/ui/Panel';
@@ -23,29 +23,21 @@ export function RequestCardPage() {
 
   const query = useQuery({ queryKey: queryKeys.request(requestId), queryFn: () => requestsApi.get(requestId) });
 
-  // Этап исполнителя по этой заявке — из «Моих задач» (api-contract.md §6.4)
-  const myStages = useQuery({
-    queryKey: queryKeys.stagesMy,
-    queryFn: stagesApi.my,
-    enabled: activeRole === 'TECH_SPECIALIST' || activeRole === 'ENGINEER',
-  });
-
   if (query.isPending) return <LoadingState />;
   if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
 
   const request = query.data;
+  // Этап ищем в маршруте самой заявки: список «Моих задач» страничный, нужного этапа на странице может не быть
   const techStage =
-    request.status === 'TECH_CHECK'
-      ? myStages.data?.content.find(
-          (s) => s.requestId === request.id && TECH_STAGES.has(s.type) && s.status === 'IN_PROGRESS',
-        )
+    activeRole === 'TECH_SPECIALIST' && request.status === 'TECH_CHECK'
+      ? request.stages?.find((s) => TECH_STAGES.has(s.type) && s.status === 'IN_PROGRESS' && s.assigneeId === user?.id)
       : undefined;
   const termsMode =
     activeRole === 'SALES_MANAGER' && request.status === 'WITH_MANAGER' && request.managerId === user?.id;
 
   return (
     <Page gap={22} top={28} testId="request-card">
-      <RequestHeader request={request} myStages={myStages.data?.content ?? []} />
+      <RequestHeader request={request} />
       <WorkflowNotice request={request} />
       {termsMode ? (
         <TermsLayout request={request} />

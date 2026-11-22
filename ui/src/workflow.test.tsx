@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { RequestView, Role, SlaView, StageView, UserView } from './api/types';
@@ -173,19 +173,20 @@ describe('Договор (шаг 7)', () => {
 });
 
 describe('Монтаж и активация (шаги 8–9)', () => {
-  const engineerApi = (current: RequestView, mine: StageView[], extra: Parameters<typeof mockApi>[0] = {}) =>
+  const engineerApi = (current: RequestView, extra: Parameters<typeof mockApi>[0] = {}) =>
     mockApi({
       'GET /me': () => jsonResponse(200, engineer),
       'GET /requests/r-1': () => jsonResponse(200, current),
       'GET /requests/r-1/history': () => jsonResponse(200, page([])),
-      'GET /stages/my': () => jsonResponse(200, page(mine)),
       ...extra,
     });
 
-  it('«Монтаж выполнен» отправляет версию этапа', async () => {
+  it('«Монтаж выполнен» находит этап в маршруте заявки, а не на странице «Моих задач»', async () => {
     signIn('ENGINEER');
     const installation = stage();
-    const fetchMock = engineerApi(request({ status: 'IN_EXECUTION', stages: [installation] }), [installation], {
+    const fetchMock = engineerApi(request({ status: 'IN_EXECUTION', stages: [installation] }), {
+      // На первой странице «Моих задач» этого этапа нет
+      'GET /stages/my': () => jsonResponse(200, page([stage({ id: 's-other', requestId: 'r-other' })])),
       'POST /stages/s-1/complete': () => jsonResponse(200, { ...installation, status: 'DONE' }),
     });
     const user = userEvent.setup();
@@ -197,10 +198,47 @@ describe('Монтаж и активация (шаги 8–9)', () => {
     expect(bodyOf(callTo(fetchMock, '/complete')![1]!)).toEqual({ version: 2 });
   });
 
+  it('этап в работе у другого инженера кнопок не даёт', async () => {
+    signIn('ENGINEER');
+    engineerApi(request({ status: 'IN_EXECUTION', stages: [stage({ assigneeId: 'u-other' })] }));
+    renderApp('/requests/r-1');
+
+    expect(await screen.findByTestId('request-card-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-complete')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-claim')).not.toBeInTheDocument();
+  });
+
+  it('после «Взять» в очереди карточка сразу показывает действие, а не старую кнопку из кэша', async () => {
+    signIn('ENGINEER');
+    const queued = stage({ status: 'QUEUED', assigneeId: undefined, version: 0 });
+    const taken = stage({ version: 1 });
+    let current = request({ status: 'IN_EXECUTION', stages: [queued] });
+    mockApi({
+      'GET /me': () => jsonResponse(200, engineer),
+      'GET /requests/r-1': () => jsonResponse(200, current),
+      'GET /requests/r-1/history': () => jsonResponse(200, page([])),
+      'GET /stages': () => jsonResponse(200, page([queued])),
+      'POST /stages/s-1/claim': () => {
+        current = { ...current, stages: [taken] };
+        return jsonResponse(200, taken);
+      },
+    });
+    const user = userEvent.setup();
+    const { router } = renderApp('/requests/r-1');
+    expect(await screen.findByTestId('action-claim')).toBeInTheDocument();
+
+    await act(() => router.navigate('/queue'));
+    const row = await screen.findByTestId('queue-row-REQ-2026-000200');
+    await user.click(within(row).getByTestId('action-claim'));
+
+    expect(await screen.findByTestId('action-complete')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-claim')).not.toBeInTheDocument();
+  });
+
   it('следующий этап из очереди можно взять прямо в карточке', async () => {
     signIn('ENGINEER');
     const activation = stage({ id: 's-2', type: 'ACTIVATION', status: 'QUEUED', assigneeId: undefined, version: 0 });
-    const fetchMock = engineerApi(request({ status: 'IN_EXECUTION', stages: [activation] }), [], {
+    const fetchMock = engineerApi(request({ status: 'IN_EXECUTION', stages: [activation] }), {
       'POST /stages/s-2/claim': () => jsonResponse(200, { ...activation, status: 'IN_PROGRESS', version: 1 }),
     });
     const user = userEvent.setup();
@@ -217,7 +255,7 @@ describe('Монтаж и активация (шаги 8–9)', () => {
   it('активация — только после подтверждения «Тест канала пройден?»', async () => {
     signIn('ENGINEER');
     const activation = stage({ id: 's-2', type: 'ACTIVATION', version: 1 });
-    const fetchMock = engineerApi(request({ status: 'IN_EXECUTION', stages: [activation] }), [activation], {
+    const fetchMock = engineerApi(request({ status: 'IN_EXECUTION', stages: [activation] }), {
       'POST /stages/s-2/activate': () => jsonResponse(200, { ...activation, status: 'DONE' }),
     });
     const user = userEvent.setup();
@@ -277,16 +315,45 @@ describe('Акт и закрытие (шаг 10)', () => {
     await waitFor(() => expect(callTo(fetchMock, '/close-by-default')).toBeTruthy());
   });
 
-  it('если ядро не отдало срок приёмки, на отказ 409 показывает понятный текст', async () => {
+  it('пока срок приёмки загружается, закрыть нельзя, а «Акт подписан» доступен', async () => {
+    signIn('SALES_MANAGER');
+    const { fetchMock } = managerApi(request({ status: 'ACTIVATED', actSentAt: '2026-11-20T09:00:00Z' }), {
+      'GET /requests/r-1/sla': () => new Promise<Response>(() => undefined),
+    });
+    const user = userEvent.setup();
+    renderApp('/requests/r-1');
+
+    expect(await screen.findByTestId('action-close-by-default')).toBeDisabled();
+    await user.click(screen.getByTestId('action-act-signed'));
+
+    await waitFor(() => expect(callTo(fetchMock, '/act/signed')).toBeTruthy());
+    expect(callTo(fetchMock, '/close-by-default')).toBeUndefined();
+  });
+
+  it('если ядро не отдало срок приёмки, закрыть нельзя', async () => {
+    signIn('SALES_MANAGER');
+    const { fetchMock } = managerApi(request({ status: 'ACTIVATED', actSentAt: '2026-11-20T09:00:00Z' }), {
+      'GET /requests/r-1/sla': () => jsonResponse(404, { code: 'NOT_FOUND', retryable: false }),
+    });
+    renderApp('/requests/r-1');
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/sla'))).toBe(true));
+    expect(await screen.findByTestId('action-close-by-default')).toBeDisabled();
+    expect(screen.getByTestId('action-act-signed')).toBeEnabled();
+  });
+
+  it('если часы разошлись и ядро ответило 409, показывает понятный текст', async () => {
     signIn('SALES_MANAGER');
     managerApi(request({ status: 'ACTIVATED', actSentAt: '2026-11-20T09:00:00Z' }), {
-      'GET /requests/r-1/sla': () => jsonResponse(404, { code: 'NOT_FOUND', retryable: false }),
+      'GET /requests/r-1/sla': () => jsonResponse(200, acceptance(new Date(Date.now() - 60_000).toISOString())),
       'POST /requests/r-1/close-by-default': () => jsonResponse(409, { code: 'ILLEGAL_TRANSITION', retryable: false }),
     });
     const user = userEvent.setup();
     renderApp('/requests/r-1');
 
-    await user.click(await screen.findByTestId('action-close-by-default'));
+    const close = await screen.findByTestId('action-close-by-default');
+    await waitFor(() => expect(close).toBeEnabled());
+    await user.click(close);
 
     expect(await screen.findByText(t.acceptanceNotExpired)).toBeInTheDocument();
     expect(screen.queryByText(texts.errors.ILLEGAL_TRANSITION!)).not.toBeInTheDocument();

@@ -228,8 +228,7 @@ describe('UI-08. Действия SC-01', () => {
     const taken = stage({ status: 'IN_PROGRESS', assigneeId: 'u-orlov', version: 1 });
     const fetchMock = mockApi({
       'GET /me': () => jsonResponse(200, orlov),
-      'GET /requests/r-131': () => jsonResponse(200, request({ status: 'TECH_CHECK' })),
-      'GET /stages/my': () => jsonResponse(200, page([taken])),
+      'GET /requests/r-131': () => jsonResponse(200, request({ status: 'TECH_CHECK', stages: [taken] })),
       'POST /stages/s-131/tech-result': () => jsonResponse(200, { ...taken, status: 'DONE' }),
       'GET /requests/r-131/history': () => jsonResponse(200, page([])),
       'GET /requests/r-131/sla': () => jsonResponse(200, slaView),
@@ -265,8 +264,7 @@ describe('UI-08. Результат ТВ «со стройкой»', () => {
     const taken = stage({ status: 'IN_PROGRESS', assigneeId: 'u-orlov', version: 1 });
     mockApi({
       'GET /me': () => jsonResponse(200, orlov),
-      'GET /requests/r-131': () => jsonResponse(200, request({ status: 'TECH_CHECK' })),
-      'GET /stages/my': () => jsonResponse(200, page([taken])),
+      'GET /requests/r-131': () => jsonResponse(200, request({ status: 'TECH_CHECK', stages: [taken] })),
       'GET /requests/r-131/history': () => jsonResponse(200, page([])),
       'GET /requests/r-131/sla': () => jsonResponse(200, slaView),
       'POST /stages/s-131/tech-result': () => jsonResponse(409, { code: 'ILLEGAL_TRANSITION', retryable: false }),
@@ -337,7 +335,6 @@ describe('UI-11. Очередь роли', () => {
       'GET /stages': () => jsonResponse(200, page([stage(), late])),
       'POST /stages/s-131/claim': () => jsonResponse(200, stage({ status: 'IN_PROGRESS', version: 1 })),
       'GET /requests/r-131': () => jsonResponse(200, request({ status: 'TECH_CHECK' })),
-      'GET /stages/my': () => jsonResponse(200, page([])),
       'GET /requests/r-131/history': () => jsonResponse(200, page([])),
     });
     const user = userEvent.setup();

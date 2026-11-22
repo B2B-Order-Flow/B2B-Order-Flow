@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { queryKeys, requestsApi, usersApi } from '../../api/endpoints';
 import { errorMessage } from '../../api/errors';
-import type { RequestView, StageView } from '../../api/types';
+import type { RequestView } from '../../api/types';
 import { BackLink } from '../../components/ui/BackLink';
 import { IntegrationErrorBadge, StatusBadge } from '../../components/StatusBadge';
 import { SelectField } from '../../components/ui/FormField';
@@ -31,7 +31,7 @@ const t = texts.requestCard;
 const TERMINAL = new Set(['CLOSED', 'REJECTED', 'CANCELLED', 'DRAFT']);
 
 // Шапка карточки: «Все заявки», номер и статус, адрес, сведения и действия активной роли.
-export function RequestHeader({ request, myStages }: { request: RequestView; myStages: StageView[] }) {
+export function RequestHeader({ request }: { request: RequestView }) {
   const { user, activeRole } = useSession();
   const navigate = useNavigate();
   const client = isCompanyRole(activeRole);
@@ -79,7 +79,7 @@ export function RequestHeader({ request, myStages }: { request: RequestView; myS
           {t.acceptOffer}
         </Button>
       ) : null}
-      <WorkflowActions request={request} myStages={myStages} />
+      <WorkflowActions request={request} />
     </>
   );
 

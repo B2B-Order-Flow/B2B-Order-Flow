@@ -350,6 +350,7 @@ export const texts = {
     closeByDefault: 'Закрыть: принято по умолчанию',
     closedByDefault: 'Заявка закрыта: принято по умолчанию',
     closeAfter: (date: string) => `Можно закрыть после ${date}`,
+    closeDueUnknown: 'Срок приёмки пока неизвестен',
     acceptanceNotExpired: 'Срок приёмки ещё не истёк: закрыть заявку по умолчанию пока нельзя',
     waitingAct: (date: string) => `Акт отправлен клиенту ${date}. Идёт срок приёмки.`,
   },
