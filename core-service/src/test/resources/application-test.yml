@@ -12,3 +12,8 @@ logging:
   level:
     root: WARN
     com.b2borderflow: INFO
+
+app:
+  sla:
+    # В интеграционных тестах планировщик не должен срабатывать сам: его вызывает тест.
+    scheduler-enabled: false

@@ -60,6 +60,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/internal/v1/auth/login", "/internal/v1/auth/register").permitAll()
+                        // Служебные каналы BFF: защищены X-Internal-Token, пользовательского JWT нет.
+                        .requestMatchers("/internal/v1/events/stream",
+                                "/internal/v1/ws/ticket/redeem").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(Customizer.withDefaults())

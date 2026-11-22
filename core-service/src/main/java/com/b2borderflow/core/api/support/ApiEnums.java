@@ -16,7 +16,14 @@ public final class ApiEnums {
     }
 
     public static Role role(com.b2borderflow.core.domain.Role value) {
-        return value == null ? null : Role.valueOf(value.name());
+        if (value == null) {
+            return null;
+        }
+        // Генератор превращает B2B_HEAD в B2_B_HEAD, поэтому простое valueOf(name) не работает.
+        if (value == com.b2borderflow.core.domain.Role.B2B_HEAD) {
+            return Role.B2_B_HEAD;
+        }
+        return Role.valueOf(value.name());
     }
 
     public static CompanyStatus companyStatus(com.b2borderflow.core.company.CompanyStatus value) {

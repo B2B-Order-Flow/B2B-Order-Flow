@@ -54,6 +54,8 @@ app:
   sla:
     # PROD — рабочие часы и праздники, DEMO — нормативы в минутах (docs/system/sla.md, 3).
     profile: ${SLA_PROFILE:PROD}
+    scheduler-delay-ms: ${SLA_SCHEDULER_DELAY_MS:60000}
+    scheduler-batch-size: ${SLA_SCHEDULER_BATCH_SIZE:100}
   integration:
     crm-url: ${MOCK_CRM_URL:http://localhost:8081}
     billing-url: ${MOCK_BILLING_URL:http://localhost:8082}
