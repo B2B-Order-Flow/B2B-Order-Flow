@@ -61,3 +61,14 @@ export function todayIso(now: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
+
+const dateInZone = (timeZone: string, now: Date) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+
+/**
+ * Границы даты договора по календарю ядра: «сегодня» там считается в UTC (DEMO) или по Москве (PROD),
+ * а профиль интерфейсу неизвестен. `initial` примут оба календаря, `max` — последняя дата, возможная в PROD.
+ */
+export function contractDateBounds(now: Date = new Date()): { initial: string; max: string } {
+  return { initial: dateInZone('UTC', now), max: dateInZone('Europe/Moscow', now) };
+}

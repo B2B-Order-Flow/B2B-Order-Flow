@@ -14,7 +14,7 @@ import type { RequestView, StageType, StageView } from '../../api/types';
 import { useNotify } from '../../components/Notifier';
 import { TextField } from '../../components/ui/FormField';
 import { Notice } from '../../components/ui/Notice';
-import { todayIso } from '../../lib/format';
+import { contractDateBounds } from '../../lib/format';
 import { contractTypeOf } from '../../lib/requestView';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
@@ -114,7 +114,7 @@ function ContractActions({ request }: { request: RequestView }) {
 /** «Договор заключён»: номер и дата подписания, T13. */
 function ContractDialog({ request, onClose }: { request: RequestView; onClose: () => void }) {
   const [number, setNumber] = useState('');
-  const [date, setDate] = useState(() => todayIso());
+  const [date, setDate] = useState(() => contractDateBounds().initial);
   const [errors, setErrors] = useState<{ contractNumber?: string; concludedAt?: string }>({});
   const conclude = useRequestAction(
     request.id,
@@ -139,7 +139,7 @@ function ContractDialog({ request, onClose }: { request: RequestView; onClose: (
     if (!number.trim()) next.contractNumber = texts.common.required;
     else if (number.trim().length > 100) next.contractNumber = t.contractNumberTooLong;
     if (!date) next.concludedAt = texts.common.required;
-    else if (date > todayIso()) next.concludedAt = t.contractDateFuture;
+    else if (date > contractDateBounds().max) next.concludedAt = t.contractDateFuture;
     setErrors(next);
     if (Object.keys(next).length === 0) conclude.mutate(undefined);
   };

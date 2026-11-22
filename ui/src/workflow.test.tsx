@@ -1,8 +1,8 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RequestView, Role, SlaView, StageView, UserView } from './api/types';
-import { todayIso } from './lib/format';
+import { contractDateBounds } from './lib/format';
 import { sessionStore } from './session/storage';
 import { texts } from './texts/ru';
 import { jsonResponse, mockApi, renderApp } from './test/utils';
@@ -140,14 +140,44 @@ describe('Договор (шаг 7)', () => {
     expect(callTo(fetchMock, '/contract/concluded')).toBeUndefined();
 
     await user.clear(date);
-    await user.type(date, todayIso());
+    const allowed = contractDateBounds().initial;
+    await user.type(date, allowed);
     await user.click(screen.getByTestId('action-contract-concluded-confirm'));
 
     await waitFor(() => expect(callTo(fetchMock, '/contract/concluded')).toBeTruthy());
     expect(bodyOf(callTo(fetchMock, '/contract/concluded')![1]!)).toEqual({
       contractNumber: 'Д-77',
-      concludedAt: todayIso(),
+      concludedAt: allowed,
       version: 5,
+    });
+  });
+
+  describe('граница суток', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it.each([
+      ['00:30 в Екатеринбурге', '2026-11-22T19:30:00Z', '2026-11-22', '2026-11-22'],
+      ['00:30 в Москве', '2026-11-22T21:30:00Z', '2026-11-22', '2026-11-23'],
+      ['последняя секунда дня по UTC', '2026-11-22T23:59:59Z', '2026-11-22', '2026-11-23'],
+      ['начало дня по UTC', '2026-11-23T00:00:00Z', '2026-11-23', '2026-11-23'],
+    ])('%s: дата по умолчанию не позже «сегодня» ядра', (_, now, initial, max) => {
+      expect(contractDateBounds(new Date(now))).toEqual({ initial, max });
+    });
+
+    it('в 00:30 по Екатеринбургу форма отправляет дату, которую DEMO не считает будущей', async () => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-22T19:30:00Z') });
+      signIn('SALES_MANAGER');
+      const { fetchMock } = managerApi(request());
+      const user = userEvent.setup();
+      renderApp('/requests/r-1');
+
+      await user.click(await screen.findByTestId('action-contract-concluded'));
+      await user.type(await screen.findByTestId('contract-number'), 'Д-77');
+      expect(screen.getByTestId('contract-date')).toHaveValue('2026-11-22');
+      await user.click(screen.getByTestId('action-contract-concluded-confirm'));
+
+      await waitFor(() => expect(callTo(fetchMock, '/contract/concluded')).toBeTruthy());
+      expect(bodyOf(callTo(fetchMock, '/contract/concluded')![1]!).concludedAt).toBe('2026-11-22');
     });
   });
 
