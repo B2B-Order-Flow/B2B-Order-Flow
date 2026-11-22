@@ -35,6 +35,7 @@ const note = (patch: Partial<NotificationView>): NotificationView => ({
   id: 'n-1',
   eventType: 'REQUEST_ASSIGNED',
   requestId: 'r-1',
+  requestNumber: 'REQ-2026-000300',
   createdAt: '2026-11-22T09:00:00Z',
   ...patch,
 });
@@ -242,18 +243,22 @@ describe('UI-14. Экран уведомлений', () => {
     expect(within(error).getByRole('button', { name: texts.common.refresh })).toBeInTheDocument();
   });
 
-  it('если карточка недоступна, уведомление показывается без номера', async () => {
-    sessionStore.setToken('jwt', 28800);
-    sessionStore.setActiveRole('SALES_MANAGER');
-    mockApi({
-      'GET /me': () => jsonResponse(200, manager),
-      'GET /notifications': () => jsonResponse(200, pageOf([note({ requestId: 'r-hidden' })])),
-      'GET /requests/r-hidden': () => jsonResponse(404, { code: 'NOT_FOUND', retryable: false }),
-    });
+  it('номер берёт из ответа и не запрашивает карточки заявок', async () => {
+    const { fetchMock } = api([note({})]);
+    renderApp('/notifications');
+
+    const row = await screen.findByTestId('notifications-row-n-1');
+    expect(within(row).getByText('Вам назначена заявка REQ-2026-000300')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/requests/r-1'))).toBe(false);
+  });
+
+  it('если номера в ответе нет, уведомление показывается без него', async () => {
+    const { fetchMock } = api([note({ requestNumber: undefined })]);
     renderApp('/notifications');
 
     const row = await screen.findByTestId('notifications-row-n-1');
     expect(within(row).getByText('Вам назначена заявка')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/requests/r-1'))).toBe(false);
   });
 });
 

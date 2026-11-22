@@ -421,6 +421,8 @@ export interface NotificationView {
   id: string;
   eventType: NotificationEventType;
   requestId?: string;
+  /** Номер заявки; нет у уведомлений компании без заявки. */
+  requestNumber?: string;
   payload?: NotificationPayload;
   createdAt: string;
   readAt?: string;

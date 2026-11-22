@@ -11,7 +11,7 @@ import { isCompanyRole } from '../../session/roles';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
 import { c, radius } from '../../theme/tokens';
-import { useReadNotification, useRequestNumbers } from './useNotifications';
+import { useReadNotification } from './useNotifications';
 
 const t = texts.notifications;
 
@@ -28,7 +28,6 @@ export function NotificationList({
   const { activeRole } = useSession();
   const navigate = useNavigate();
   const read = useReadNotification();
-  const numbers = useRequestNumbers(items);
   const reader = { client: isCompanyRole(activeRole), coordinator: activeRole === 'COORDINATOR' };
 
   const open = (item: NotificationView, target: string) => {
@@ -42,7 +41,6 @@ export function NotificationList({
       {items.map((item) => {
         const unread = !item.readAt;
         const target = notificationTarget(item);
-        const number = item.requestId ? numbers.get(item.requestId) : undefined;
         const content = (
           <Box sx={{ display: 'flex', gap: '10px', minWidth: 0, flex: 1, textAlign: 'left' }}>
             <Box
@@ -58,7 +56,7 @@ export function NotificationList({
             />
             <Box sx={{ minWidth: 0 }}>
               <Typography variant={unread ? 'subtitle2' : 'body1'} component="div" sx={{ overflowWrap: 'anywhere' }}>
-                {notificationText(item, { ...reader, requestNumber: number })}
+                {notificationText(item, { ...reader, requestNumber: item.requestNumber })}
               </Typography>
               <Typography variant="caption" component="div" sx={{ color: c('text-muted') }}>
                 {formatShortDateTime(item.createdAt)}
