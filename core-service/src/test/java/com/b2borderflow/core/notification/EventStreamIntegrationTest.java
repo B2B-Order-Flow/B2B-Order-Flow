@@ -3,6 +3,8 @@ package com.b2borderflow.core.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.b2borderflow.core.support.WeekTwoApiSupport;
+import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,23 @@ class EventStreamIntegrationTest extends WeekTwoApiSupport {
                 "select published_at is not null from notification where id = ?",
                 Boolean.class, notificationId)).isTrue();
         emitter.complete();
+    }
+
+    @Test
+    void companyRejectedSignalContainsOnlyCompanyId() {
+        Notification notification = new Notification();
+        notification.setId(UUID.randomUUID());
+        notification.setRecipientUserId(UUID.randomUUID());
+        notification.setEventType("COMPANY_REJECTED");
+        notification.setPayload(Map.of("companyId", "company-1", "reason", "Документы не подтверждены"));
+        notification.setCreatedAt(OffsetDateTime.now());
+
+        var signal = EventStreamService.signal(notification);
+
+        assertThat(signal).isNotNull();
+        assertThat(signal.getPayload())
+                .containsOnlyKeys("companyId")
+                .containsEntry("companyId", "company-1");
     }
 
     @Test

@@ -112,5 +112,9 @@ class CompanyIntegrationTest extends AbstractIntegrationTest {
                 "select count(*) from notification where recipient_user_id = ? "
                         + "and event_type = 'COMPANY_REJECTED' and payload->>'companyId' = ?",
                 Integer.class, owner.getId(), company.getId().toString())).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select payload->>'reason' from notification where recipient_user_id = ? "
+                        + "and event_type = 'COMPANY_REJECTED'",
+                String.class, owner.getId())).isEqualTo("Документы не подтверждены");
     }
 }

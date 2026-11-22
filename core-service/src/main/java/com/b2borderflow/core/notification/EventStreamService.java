@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
@@ -134,7 +135,7 @@ public class EventStreamService {
         }
     }
 
-    private static EventSignal signal(Notification notification) {
+    static EventSignal signal(Notification notification) {
         NotificationEventType type;
         try {
             type = NotificationEventType.fromValue(notification.getEventType());
@@ -144,12 +145,22 @@ public class EventStreamService {
         if (type == null) {
             return null;
         }
+        Map<String, Object> payload = notification.getPayload() == null
+                ? java.util.Map.of()
+                : notification.getPayload();
+        // В сигнале компании по notifications.md, 5 — только companyId; причина отказа
+        // остаётся в REST-уведомлении и не уходит в WebSocket.
+        if (type == NotificationEventType.COMPANY_CONFIRMED
+                || type == NotificationEventType.COMPANY_REJECTED) {
+            Object companyId = payload.get("companyId");
+            payload = companyId == null ? java.util.Map.of() : java.util.Map.of("companyId", companyId);
+        }
         return new EventSignal()
                 .id(notification.getId())
                 .type(type)
                 .requestId(notification.getRequestId())
                 .userId(notification.getRecipientUserId())
                 .createdAt(notification.getCreatedAt())
-                .payload(notification.getPayload() == null ? java.util.Map.of() : notification.getPayload());
+                .payload(payload);
     }
 }
