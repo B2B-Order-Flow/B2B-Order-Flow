@@ -14,8 +14,12 @@ import com.b2borderflow.core.error.ErrorCode;
 import com.b2borderflow.core.error.Violation;
 import com.b2borderflow.core.integration.ExternalCallResult;
 import com.b2borderflow.core.integration.ExternalPayload;
+import com.b2borderflow.core.notification.NotificationEvent;
+import com.b2borderflow.core.notification.NotificationService;
 import com.b2borderflow.core.security.CurrentUser;
 import com.b2borderflow.core.security.CurrentUserProvider;
+import com.b2borderflow.core.sla.SlaTimerKind;
+import com.b2borderflow.core.sla.SlaTimerService;
 import com.b2borderflow.core.user.AppUser;
 import com.b2borderflow.core.user.AppUserRepository;
 import java.math.BigDecimal;
@@ -60,6 +64,8 @@ public class RequestWorkflowService {
     private final RequestViewFactory viewFactory;
     private final CurrentUserProvider currentUserProvider;
     private final AuditService auditService;
+    private final NotificationService notificationService;
+    private final SlaTimerService slaTimerService;
     private final Clock clock;
 
     public RequestWorkflowService(RequestRepository requestRepository,
@@ -73,6 +79,8 @@ public class RequestWorkflowService {
                                   RequestViewFactory viewFactory,
                                   CurrentUserProvider currentUserProvider,
                                   AuditService auditService,
+                                  NotificationService notificationService,
+                                  SlaTimerService slaTimerService,
                                   Clock clock) {
         this.requestRepository = requestRepository;
         this.companyRepository = companyRepository;
@@ -85,6 +93,8 @@ public class RequestWorkflowService {
         this.viewFactory = viewFactory;
         this.currentUserProvider = currentUserProvider;
         this.auditService = auditService;
+        this.notificationService = notificationService;
+        this.slaTimerService = slaTimerService;
         this.clock = clock;
     }
 
@@ -126,7 +136,10 @@ public class RequestWorkflowService {
         request.setStatusChangedAt(now);
         request.setSubmittedAt(now);
         request.setIntegrationError(false);
-        requestRepository.saveAndFlush(request);
+        Request saved = requestRepository.saveAndFlush(request);
+        // T01: запускаем контрольные сроки проверки данных и результата ТВ.
+        slaTimerService.startControlTimer(saved, SlaTimerKind.DATA_CHECK);
+        slaTimerService.startControlTimer(saved, SlaTimerKind.TECH_RESULT);
 
         Map<String, Object> details = new HashMap<>();
         details.put("revisionNo", revisionNo);
@@ -134,6 +147,7 @@ public class RequestWorkflowService {
         auditService.record(actor, request.getCompanyId(), request.getId(), AuditAction.REQUEST_SUBMITTED,
                 "REQUEST", request.getId(), RequestStatus.DRAFT.name(), RequestStatus.DATA_CHECK.name(),
                 null, details);
+        notificationService.notifyAuthor(request, NotificationEvent.REQUEST_SUBMITTED, Map.of());
 
         return new SubmissionStart(request.getId(), request.getCompanyId(), company.getInn());
     }
@@ -187,6 +201,10 @@ public class RequestWorkflowService {
             request.setIntegrationError(false);
             requestRepository.saveAndFlush(request);
 
+            // T03: данные получены, срок проверки данных остановлен, стартует срок назначения менеджера.
+            slaTimerService.stopControlTimer(requestId, SlaTimerKind.DATA_CHECK);
+            slaTimerService.startControlTimer(request, SlaTimerKind.MANAGER_ASSIGNMENT);
+
             Map<String, Object> checkDetails = new HashMap<>();
             checkDetails.put("systems", ExternalSystem.values().length);
             checkDetails.put("actor", "SYSTEM");
@@ -200,6 +218,8 @@ public class RequestWorkflowService {
                 request.setStatus(RequestStatus.WITH_MANAGER);
                 request.setStatusChangedAt(now);
                 requestRepository.saveAndFlush(request);
+                // T03b: менеджер определён автоматически, срок назначения остановлен.
+                slaTimerService.stopControlTimer(requestId, SlaTimerKind.MANAGER_ASSIGNMENT);
 
                 Map<String, Object> details = new HashMap<>();
                 details.put("managerId", data.managerId());
@@ -209,6 +229,8 @@ public class RequestWorkflowService {
                         AuditAction.REQUEST_MANAGER_ASSIGNED,
                         "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.WITH_MANAGER.name(),
                         null, details);
+                notificationService.notifyUsers(notificationService.authorAndManager(request), request,
+                        NotificationEvent.REQUEST_ASSIGNED, Map.of());
             }
         } else {
             applyExternalData(request, data);
@@ -223,6 +245,7 @@ public class RequestWorkflowService {
                     AuditAction.REQUEST_DATA_CHECK_FAILED,
                     "REQUEST", requestId, RequestStatus.DATA_CHECK.name(), RequestStatus.DATA_CHECK.name(),
                     null, details);
+            notificationService.notifyCoordinators(request, NotificationEvent.INTEGRATION_ERROR, Map.of());
             warnings = List.of(RequestViewFactory.integrationWarning());
         }
 
@@ -266,12 +289,15 @@ public class RequestWorkflowService {
         request.setStatus(RequestStatus.WITH_MANAGER);
         request.setStatusChangedAt(OffsetDateTime.now(clock));
         Request saved = requestRepository.saveAndFlush(request);
+        slaTimerService.stopControlTimer(requestId, SlaTimerKind.MANAGER_ASSIGNMENT);
 
         Map<String, Object> details = new HashMap<>();
         details.put("managerId", actor.id());
         auditService.record(actor, saved.getCompanyId(), saved.getId(), AuditAction.REQUEST_MANAGER_CLAIMED,
                 "REQUEST", saved.getId(), RequestStatus.DATA_CHECK.name(), RequestStatus.WITH_MANAGER.name(),
                 null, details);
+        notificationService.notifyUsers(notificationService.authorAndManager(saved), saved,
+                NotificationEvent.REQUEST_ASSIGNED, Map.of());
 
         return viewFactory.toView(saved, actor, List.of());
     }
@@ -322,12 +348,20 @@ public class RequestWorkflowService {
         }
 
         Request saved = requestRepository.saveAndFlush(request);
+        if (action == AuditAction.REQUEST_MANAGER_ASSIGNED) {
+            // T03b координатором: срок назначения менеджера остановлен.
+            slaTimerService.stopControlTimer(requestId, SlaTimerKind.MANAGER_ASSIGNMENT);
+        }
 
         Map<String, Object> details = new HashMap<>();
         details.put("managerId", managerId);
         details.put("previousManagerId", previousManagerId);
         auditService.record(actor, saved.getCompanyId(), saved.getId(), action,
                 "REQUEST", saved.getId(), previousStatus, newStatus, null, details);
+        if (action == AuditAction.REQUEST_MANAGER_ASSIGNED) {
+            notificationService.notifyUsers(notificationService.authorAndManager(saved), saved,
+                    NotificationEvent.REQUEST_ASSIGNED, Map.of());
+        }
 
         return viewFactory.toView(saved, actor, List.of());
     }

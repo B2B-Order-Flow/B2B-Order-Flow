@@ -18,6 +18,7 @@ import { FieldRow, SelectField, TextField } from '../components/ui/FormField';
 import { Notice } from '../components/ui/Notice';
 import { Columns, Muted, Page, PageTitle, Panel, PanelTitle } from '../components/ui/Panel';
 import { ErrorState, LoadingState } from '../components/states';
+import { todayIso } from '../lib/format';
 import { isValidPhone } from '../lib/requisites';
 import { useSession } from '../session/SessionProvider';
 import { texts } from '../texts/ru';
@@ -46,12 +47,6 @@ const API_FIELD: Record<string, FieldKey> = {
   contactPhone: 'contactPhone',
   contractPreference: 'contractPreference',
   clientComment: 'clientComment',
-};
-
-const today = () => {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 };
 
 function fromRequest(request: RequestView | undefined, fallbackContact: string): Form {
@@ -87,7 +82,7 @@ function validate(form: Form, forSubmit: boolean): Errors {
   if (form.address.trim().length > 500) errors.address = t.errors.tooLong(500);
   const speed = form.speed.trim();
   if (speed && (!/^\d+$/.test(speed) || Number(speed) < 1 || Number(speed) > 100_000)) errors.speed = t.errors.speed;
-  if (form.desiredDate && form.desiredDate < today()) errors.desiredDate = t.errors.date;
+  if (form.desiredDate && form.desiredDate < todayIso()) errors.desiredDate = t.errors.date;
   if (form.contactName.trim().length > 255) errors.contactName = t.errors.tooLong(255);
   if (form.contactPhone.trim() && !isValidPhone(form.contactPhone.trim())) errors.contactPhone = t.errors.phone;
   if (form.clientComment.length > 4000) errors.clientComment = t.errors.tooLong(4000);

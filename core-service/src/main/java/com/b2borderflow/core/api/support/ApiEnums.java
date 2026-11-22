@@ -16,7 +16,14 @@ public final class ApiEnums {
     }
 
     public static Role role(com.b2borderflow.core.domain.Role value) {
-        return value == null ? null : Role.valueOf(value.name());
+        if (value == null) {
+            return null;
+        }
+        // Генератор превращает B2B_HEAD в B2_B_HEAD, поэтому простое valueOf(name) не работает.
+        if (value == com.b2borderflow.core.domain.Role.B2B_HEAD) {
+            return Role.B2_B_HEAD;
+        }
+        return Role.valueOf(value.name());
     }
 
     public static CompanyStatus companyStatus(com.b2borderflow.core.company.CompanyStatus value) {
@@ -40,5 +47,54 @@ public final class ApiEnums {
 
     public static ContractType contractType(com.b2borderflow.core.request.ContractType value) {
         return value == null ? null : ContractType.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.StageType stageType(
+            com.b2borderflow.core.request.RequestStageType value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.StageType.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.StageStatus stageStatus(
+            com.b2borderflow.core.request.RequestStageStatus value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.StageStatus.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.TechResult techResult(
+            com.b2borderflow.core.request.TechResult value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.TechResult.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.RequestClass requestClass(
+            com.b2borderflow.core.routing.RequestClass value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.RequestClass.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.SlaTimerKind slaTimerKind(
+            com.b2borderflow.core.sla.SlaTimerKind value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.SlaTimerKind.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.SlaTimerStatus slaTimerStatus(
+            com.b2borderflow.core.sla.SlaTimerStatus value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.SlaTimerStatus.valueOf(value.name());
+    }
+
+    public static com.b2borderflow.core.api.model.PauseReason pauseReason(
+            com.b2borderflow.core.sla.PauseReasonCode value) {
+        return value == null
+                ? null
+                : com.b2borderflow.core.api.model.PauseReason.valueOf(value.name());
     }
 }

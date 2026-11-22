@@ -59,6 +59,8 @@ export function QueuePage() {
     mutationFn: (stage: StageView) => stagesApi.claim(stage.id, stage.version),
     onSuccess: (_, stage) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.stagesAll });
+      // Карточка берёт этап из заявки: кэш со старым статусом этапа показал бы кнопку «Взять» ещё раз
+      queryClient.removeQueries({ queryKey: queryKeys.request(stage.requestId) });
       notify.success(t.claimed);
       void navigate(`/requests/${stage.requestId}`);
     },
@@ -180,6 +182,7 @@ function AssignStageDialog({ stage, role, onClose }: { stage: StageView; role: R
     mutationFn: () => stagesApi.assign(stage.id, assigneeId, stage.version),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.stagesAll });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.request(stage.requestId) });
       notify.success(t.assigned);
       onClose();
     },

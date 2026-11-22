@@ -53,6 +53,10 @@ class CompanyIntegrationTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select count(*) from audit_log where entity_id = ? and action = 'COMPANY_CONFIRMED'",
                 Integer.class, companyId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from notification where recipient_user_id = ? "
+                        + "and event_type = 'COMPANY_CONFIRMED' and payload->>'companyId' = ?",
+                Integer.class, guest.getId(), companyId.toString())).isEqualTo(1);
     }
 
     @Test
@@ -104,5 +108,13 @@ class CompanyIntegrationTest extends AbstractIntegrationTest {
         assertThat(rejected.status()).isEqualTo(200);
         assertThat(rejected.body().get("status")).isEqualTo("REJECTED");
         assertThat(rejected.body().get("rejectReason")).isEqualTo("Документы не подтверждены");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from notification where recipient_user_id = ? "
+                        + "and event_type = 'COMPANY_REJECTED' and payload->>'companyId' = ?",
+                Integer.class, owner.getId(), company.getId().toString())).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select payload->>'reason' from notification where recipient_user_id = ? "
+                        + "and event_type = 'COMPANY_REJECTED'",
+                String.class, owner.getId())).isEqualTo("Документы не подтверждены");
     }
 }
