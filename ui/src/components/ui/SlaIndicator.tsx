@@ -20,6 +20,7 @@ export function SlaIndicator({
   state,
   share,
   testId = 'sla-indicator',
+  attributes,
 }: {
   label: string;
   value: string;
@@ -27,11 +28,17 @@ export function SlaIndicator({
   /** Доля израсходованного норматива, 0…1. */
   share: number;
   testId?: string;
+  /** Дополнительные data-атрибуты корня для автотестов, например вид срока. */
+  attributes?: Record<`data-${string}`, string | undefined>;
 }) {
   const color = COLORS[state];
   const width = state === 'breach' ? 100 : Math.max(0, Math.min(1, share)) * 100;
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }} data-testid={testId}>
+    <Box
+      sx={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}
+      data-testid={testId}
+      {...attributes}
+    >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
         <Typography variant="body1" component="span" noWrap>
           {label}

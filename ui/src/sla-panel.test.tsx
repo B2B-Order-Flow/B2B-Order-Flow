@@ -89,17 +89,49 @@ describe('Блок «Сроки» в карточке', () => {
     const panel = await screen.findByTestId('request-card-sla');
     expect(within(panel).getByText(t.stages)).toBeInTheDocument();
     expect(within(panel).getByText(t.control)).toBeInTheDocument();
-    expect(within(panel).getByTestId('request-card-sla-CONTRACT_SIGNING-value')).toHaveAttribute(
-      'data-state',
-      'paused',
-    );
-    expect(within(panel).getByTestId('request-card-sla-TECH_CHECK-value')).toHaveTextContent('завершён');
-    expect(within(panel).getByTestId('request-card-sla-TECH_RESULT-value')).toHaveTextContent('осталось');
+    expect(within(panel).getByTestId('request-card-sla-timer-t-paused-value')).toHaveAttribute('data-state', 'paused');
+    expect(within(panel).getByTestId('request-card-sla-timer-t-done-value')).toHaveTextContent('завершён');
+    expect(within(panel).getByTestId('request-card-sla-timer-t-control-value')).toHaveTextContent('осталось');
     expect(within(panel).getAllByText(/Календарное: 1 ч 12 мин/).length).toBeGreaterThan(0);
 
     const pause = within(panel).getByTestId('sla-pause');
     expect(pause).toHaveTextContent(texts.pauseReason.AWAIT_CLIENT_SIGNATURE);
     expect(pause).toHaveTextContent('Ждём подпись директора');
+  });
+
+  it('у строки срока — ID таймера в метке, вид и этап в атрибутах', async () => {
+    open('SALES_MANAGER', userWith({ operatorRoles: ['SALES_MANAGER'] }), () => jsonResponse(200, sla));
+
+    const panel = await screen.findByTestId('request-card-sla');
+    const paused = within(panel).getByTestId('request-card-sla-timer-t-paused');
+    expect(paused).toHaveAttribute('data-kind', 'STAGE_SLA');
+    expect(paused).toHaveAttribute('data-stage', 'CONTRACT_SIGNING');
+    const control = within(panel).getByTestId('request-card-sla-timer-t-control');
+    expect(control).toHaveAttribute('data-kind', 'TECH_RESULT');
+    expect(control).not.toHaveAttribute('data-stage');
+  });
+
+  it('два таймера одного вида различаются по метке', async () => {
+    const twice: SlaView = {
+      requestId: 'r-1',
+      timers: [
+        timer({ id: 't-old', kind: 'MANAGER_ASSIGNMENT', stageType: undefined, status: 'STOPPED' }),
+        timer({ id: 't-new', kind: 'MANAGER_ASSIGNMENT', stageType: undefined, status: 'RUNNING' }),
+      ],
+      pauses: [],
+    };
+    open('COORDINATOR', userWith({ operatorRoles: ['COORDINATOR'] }), () => jsonResponse(200, twice));
+
+    const panel = await screen.findByTestId('request-card-sla');
+    const rows = within(panel)
+      .getAllByTestId(/^request-card-sla-timer-[^-]+-[^-]+$/)
+      .filter((el) => el.getAttribute('data-kind') === 'MANAGER_ASSIGNMENT');
+    expect(rows.map((el) => el.getAttribute('data-testid'))).toEqual([
+      'request-card-sla-timer-t-new',
+      'request-card-sla-timer-t-old',
+    ]);
+    expect(within(panel).getByTestId('request-card-sla-timer-t-new-value')).toHaveTextContent('осталось');
+    expect(within(panel).getByTestId('request-card-sla-timer-t-old-value')).toHaveTextContent('завершён');
   });
 
   it('клиенту блок не показывается, и запрос SLA не отправляется', async () => {

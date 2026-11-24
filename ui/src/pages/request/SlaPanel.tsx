@@ -30,7 +30,15 @@ const activeFirst = (timers: SlaTimerView[]) => [
 ];
 
 /** Один срок: индикатор, время по SLA и календарное, текущая пауза (sla.md §10). */
-export function SlaTimerRow({ timer, testId }: { timer: SlaTimerView; testId?: string }) {
+export function SlaTimerRow({
+  timer,
+  testId,
+  attributes,
+}: {
+  timer: SlaTimerView;
+  testId?: string;
+  attributes?: Record<`data-${string}`, string | undefined>;
+}) {
   const snapshot = slaSnapshot(timer);
   const times = [
     snapshot.slaTimeLabel ? texts.requestCard.slaTime(snapshot.slaTimeLabel) : null,
@@ -45,6 +53,7 @@ export function SlaTimerRow({ timer, testId }: { timer: SlaTimerView; testId?: s
         state={snapshot.state}
         share={snapshot.share}
         testId={testId}
+        attributes={attributes}
       />
       {times.length ? (
         <Typography variant="caption" sx={{ color: c('text-muted') }}>
@@ -69,7 +78,9 @@ function TimerGroup({ title, timers }: { title: string; timers: SlaTimerView[] }
           <SlaTimerRow
             key={timer.id}
             timer={timer}
-            testId={`request-card-sla-${timer.kind === 'STAGE_SLA' ? (timer.stageType ?? timer.id) : timer.kind}`}
+            // ID таймера: два срока одного вида (например, MANAGER_ASSIGNMENT после повторной проверки) различимы
+            testId={`request-card-sla-timer-${timer.id}`}
+            attributes={{ 'data-kind': timer.kind, 'data-stage': timer.stageType }}
           />
         ))}
       </Box>
