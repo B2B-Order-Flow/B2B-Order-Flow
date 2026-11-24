@@ -448,7 +448,7 @@
 - Колокольчик в шапке со счётчиком непрочитанных. До подключения WebSocket счётчик обновляется запросом раз в 30 секунд и после каждого действия пользователя.
 - Выпадающий список последних уведомлений и ссылка «Все уведомления» → `/notifications`.
 - Строка: текст, номер заявки, время; непрочитанные выделены. Клик открывает карточку заявки и отмечает уведомление прочитанным. Кнопка «Отметить все прочитанными».
-- Тексты уведомлений — по [notifications.md](../system/notifications.md) (готовит Дима). Пока текста нет, показывается подпись типа события и номер заявки.
+- Тексты уведомлений — по [notifications.md](../system/notifications.md), раздел 4. Номер заявки приходит в `NotificationView.requestNumber`, отдельных запросов карточек нет; если номера нет, уведомление показывается без него. Статус, причину и комментарий события заявки пользователь видит в карточке. У `COMPANY_REJECTED` причина приходит в `payload.reason` и показывается в тексте; без неё — общий текст. Клик ведёт на «Мою компанию» (UI-04), где видна причина: UI-03 открыт только пользователю без роли.
 - **WebSocket (П2):** билет `GET /ws/ticket`, соединение `/ws?ticket=…`; при обрыве — переподключение с задержкой 1, 2, 4, 8 … 30 секунд; после переподключения — чтение непрочитанных по REST. Сообщение WebSocket — только сигнал перечитать данные ([api-contract.md](../system/api-contract.md), 4.4).
 - Пусто: «Новых уведомлений нет».
 
@@ -593,6 +593,7 @@
 | UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
 | UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee` |
 | UI-12 Мои задачи | `my-tasks-page`, `my-tasks-table`, `my-tasks-row-<номер>`, `action-open` |
+| UI-14 Уведомления | колокольчик — `notifications-bell`, `notifications-badge`, `notifications-popover`, `notifications-menu-row-<id>`, `notifications-all`; экран — `notifications-page`, `notifications-row-<id>` (атрибут `data-state`: `unread` / `read`), `notifications-page-number`; `action-read`, `action-read-all` |
 
 ## 12. Принятые решения
 

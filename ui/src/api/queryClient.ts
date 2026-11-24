@@ -1,10 +1,15 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
+import { queryKeys } from './endpoints';
 import { isApiError } from './errors';
 
 // Повторяются только чтения и только при сбое связи (retryable); запись не повторяется никогда
 // (api-contract.md §5.1, ui-requirements.md §2 п. 5).
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
+    // Счётчик уведомлений обновляется после каждого действия пользователя (ui-requirements.md §7.4)
+    mutationCache: new MutationCache({
+      onSuccess: () => void client.invalidateQueries({ queryKey: queryKeys.notificationsAll }),
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30_000,
@@ -16,4 +21,5 @@ export function createQueryClient(): QueryClient {
       },
     },
   });
+  return client;
 }

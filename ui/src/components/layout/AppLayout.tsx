@@ -7,6 +7,7 @@ import { texts } from '../../texts/ru';
 import { c, CONTENT_WIDTH, radius, textStyles } from '../../theme/tokens';
 import { Brand } from '../ui/Brand';
 import { Notice } from '../ui/Notice';
+import { NotificationBell } from './NotificationBell';
 import { RoleSwitcher } from './RoleSwitcher';
 import { UserMenu } from './UserMenu';
 
@@ -62,6 +63,7 @@ export function AppLayout() {
           </Box>
 
           <RoleSwitcher />
+          <NotificationBell />
           <UserMenu />
         </Box>
       </Box>

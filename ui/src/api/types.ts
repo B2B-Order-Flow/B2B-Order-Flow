@@ -371,3 +371,66 @@ export interface OperatorUserView {
   operatorRoles: Role[];
   active: boolean;
 }
+
+/** Коды событий (api-contract.md, раздел 7; core-api.yaml, NotificationEventType). */
+export type NotificationEventType =
+  | 'REQUEST_SUBMITTED'
+  | 'REQUEST_ASSIGNED'
+  | 'STAGE_QUEUED'
+  | 'STAGE_ASSIGNED'
+  | 'STAGE_REASSIGN_REQUIRED'
+  | 'STATUS_CHANGED'
+  | 'APPROVAL_RETURNED'
+  | 'TECH_RETURNED'
+  | 'CONTRACT_CHANGE_REQUESTED'
+  | 'TECH_RECHECK_REQUIRED'
+  | 'APPROVAL_REJECTED'
+  | 'TECH_RESULT_NONE'
+  | 'CONTRACT_READY'
+  | 'SERVICE_ACTIVATED'
+  | 'DEFECT_CLAIMED'
+  | 'ACT_SENT'
+  | 'ACCEPTANCE_REMINDER'
+  | 'REQUEST_CLOSED'
+  | 'CANCEL_REQUESTED'
+  | 'CANCEL_TERMS_READY'
+  | 'CANCEL_RESOLVED'
+  | 'SLA_WARNING'
+  | 'SLA_BREACH'
+  | 'SLA_ESCALATION'
+  | 'PAUSE_LIMIT_WARNING'
+  | 'PAUSE_LIMIT_REACHED'
+  | 'CONTROL_DEADLINE_WARNING'
+  | 'CONTROL_DEADLINE_BREACH'
+  | 'INTEGRATION_ERROR'
+  | 'COMPANY_CONFIRMED'
+  | 'COMPANY_REJECTED'
+  | 'EXPORT_READY';
+
+/** Данные для подписи уведомления (notifications.md, раздел 5). */
+export interface NotificationPayload {
+  stageId?: string;
+  stageType?: StageType;
+  minutesLeft?: number;
+  deadlineKind?: string;
+  companyId?: string;
+  exportId?: string;
+  /** Причина отказа: приходит у COMPANY_REJECTED через REST. */
+  reason?: string;
+}
+
+export interface NotificationView {
+  id: string;
+  eventType: NotificationEventType;
+  requestId?: string;
+  /** Номер заявки; нет у уведомлений компании без заявки. */
+  requestNumber?: string;
+  payload?: NotificationPayload;
+  createdAt: string;
+  readAt?: string;
+  publishedAt?: string;
+}
+
+export interface NotificationQuery extends PageQuery {
+  unread?: boolean;
+}
