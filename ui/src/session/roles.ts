@@ -94,6 +94,7 @@ export function menuFor(role: Role | null): MenuItem[] {
       return [
         { path: '/requests', label: m.requests },
         { path: '/my-tasks', label: m.myTasks },
+        { path: '/queue', label: m.queue },
       ];
     case 'COORDINATOR':
       return [
@@ -118,7 +119,7 @@ export const routeAccess = {
   requests: NOT_ADMIN_OR_GUEST.filter((r) => r !== 'CLIENT_ADMIN'),
   requestForm: CLIENT_CREATORS,
   managerQueue: ['SALES_MANAGER', 'COORDINATOR'],
-  queue: [...STAGE_EXECUTORS.filter((r) => r !== 'B2B_HEAD'), 'COORDINATOR'],
+  queue: [...STAGE_EXECUTORS, 'COORDINATOR'],
   myTasks: STAGE_EXECUTORS,
   notifications: NOT_ADMIN_OR_GUEST,
 } satisfies Record<string, RouteAccess>;

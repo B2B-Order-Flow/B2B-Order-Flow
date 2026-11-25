@@ -15,6 +15,7 @@ import { OptionCards } from '../../components/ui/OptionCards';
 import { Panel, PanelTitle } from '../../components/ui/Panel';
 import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
+import { useRejectionReasons } from './useRejectionReasons';
 import { useRequestAction } from './useRequestAction';
 
 const t = texts.techResult;
@@ -38,6 +39,7 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
   const [comment, setComment] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [confirmNone, setConfirmNone] = useState(false);
+  const reasons = useRejectionReasons(stage.type);
   // «Есть со стройкой» ядро примет с недели 3 (T06): до тех пор — 409 ILLEGAL_TRANSITION
   const [constructionUnavailable, setConstructionUnavailable] = useState(false);
 
@@ -73,7 +75,7 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
     if (result === 'NONE') {
       if (!reasonCode) next.reasonCode = texts.common.required;
       else payload.reasonCode = reasonCode;
-      if (reasonCode === 'OTHER' && !comment.trim()) next.comment = texts.common.required;
+      if (reasonCode && reasons.requiresComment(reasonCode) && !comment.trim()) next.comment = texts.common.required;
       if (comment.trim()) payload.comment = comment.trim();
     }
     setErrors(next);
@@ -148,13 +150,13 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
             value={reasonCode}
             onChange={setReasonCode}
             placeholder={t.chooseReason}
-            options={Object.entries(t.reasons).map(([value, label]) => ({ value, label }))}
+            options={reasons.options}
             error={errors.reasonCode ?? serverErrors.reasonCode}
             testId="tech-reason"
           />
           <TextField
             label={t.comment}
-            required={reasonCode === 'OTHER'}
+            required={Boolean(reasonCode) && reasons.requiresComment(reasonCode)}
             value={comment}
             onChange={setComment}
             rows={3}

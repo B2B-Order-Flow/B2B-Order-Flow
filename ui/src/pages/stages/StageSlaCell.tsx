@@ -1,19 +1,51 @@
 import Typography from '@mui/material/Typography';
 import type { StageView } from '../../api/types';
+import { formatDuration } from '../../lib/sla';
 import { texts } from '../../texts/ru';
-import { c } from '../../theme/tokens';
+import { c, type ColorToken } from '../../theme/tokens';
+
+const t = texts.queue.sla;
 
 /**
- * Ячейка «Срок этапа» в очередях. Сводки SLA в StageView пока нет: отдаст ли её ядро, решат
- * Дима и Кирилл до 24.11. До тех пор показываем «—», а срок этапа — в карточке заявки.
+ * Ячейка «Срок этапа» в очередях и «Моих задачах» по краткой сводке StageView.sla (решение Димы и
+ * Кирилла недели 3). Остаток — в рабочем времени; полный срок с журналом пауз — в карточке заявки.
  */
-export function StageSlaCell() {
+export function StageSlaCell({ stage }: { stage: StageView }) {
+  const sla = stage.sla;
+  let text = '—';
+  let color: ColorToken = 'text-muted';
+  if (sla) {
+    const minutes = sla.remainingMinutes;
+    if (sla.status === 'STOPPED') text = t.stopped;
+    else if (sla.status === 'PAUSED') text = t.paused;
+    else if (sla.overdue || sla.status === 'BREACHED') {
+      text = minutes !== undefined && minutes < 0 ? t.overdueBy(formatDuration(-minutes)) : t.overdue;
+      color = 'sla-breach-text';
+    } else if (minutes !== undefined) {
+      text = t.left(formatDuration(minutes));
+      color = 'text-primary';
+    }
+  }
   return (
-    <Typography variant="body1" component="span" sx={{ color: c('text-muted') }} title={texts.queue.slaLater}>
-      —
+    <Typography
+      variant="body1"
+      component="span"
+      sx={{ color: c(color) }}
+      title={sla ? undefined : texts.queue.slaLater}
+      data-testid="stage-sla-cell"
+      data-state={sla?.overdue ? 'BREACHED' : sla?.status}
+    >
+      {text}
     </Typography>
   );
 }
 
-/** Без сводки SLA очередь сортируется по времени постановки: дольше ждущие этапы — выше. */
-export const byQueuedAt = (a: StageView, b: StageView) => Date.parse(a.createdAt) - Date.parse(b.createdAt);
+/** Сверху — этапы с меньшим остатком срока (просроченные первыми), без сводки — дольше ждущие. */
+export function byUrgency(a: StageView, b: StageView): number {
+  const left = (s: StageView) =>
+    s.sla && s.sla.status !== 'STOPPED' && s.sla.status !== 'PAUSED' && s.sla.remainingMinutes !== undefined
+      ? s.sla.remainingMinutes
+      : Number.POSITIVE_INFINITY;
+  const diff = left(a) - left(b);
+  return diff !== 0 && !Number.isNaN(diff) ? diff : Date.parse(a.createdAt) - Date.parse(b.createdAt);
+}

@@ -14,6 +14,7 @@ import type { RequestView, StageType, StageView } from '../../api/types';
 import { useNotify } from '../../components/Notifier';
 import { TextField } from '../../components/ui/FormField';
 import { Notice } from '../../components/ui/Notice';
+import { approvalStageFor, isSelfApproval } from '../../lib/approvals';
 import { contractDateBounds } from '../../lib/format';
 import { contractTypeOf } from '../../lib/requestView';
 import { useSession } from '../../session/SessionProvider';
@@ -49,7 +50,7 @@ function useAcceptanceDue(request: RequestView, enabled: boolean): number | null
 // Кнопки действий SC-01 в шапке карточки (ui-requirements.md §7.3 и §8). Видимость — по роли и статусу,
 // окончательную проверку делает ядро.
 export function WorkflowActions({ request }: { request: RequestView }) {
-  const { activeRole } = useSession();
+  const { activeRole, user } = useSession();
   const manager = useIsRequestManager(request);
 
   if (manager && request.status === 'CONTRACT_SIGNING' && contractTypeOf(request) !== 'OFFER') {
@@ -59,12 +60,23 @@ export function WorkflowActions({ request }: { request: RequestView }) {
   if (activeRole === 'ENGINEER' && request.status === 'IN_EXECUTION') {
     return <EngineerActions request={request} />;
   }
+  // Этап согласования своей роли лежит в очереди — его можно взять прямо из карточки
+  const approvalQueued = approvalStageFor(request, activeRole, user?.id, 'QUEUED');
+  if (approvalQueued) return <ClaimStage request={request} stage={approvalQueued} />;
   return null;
 }
 
 /** Строка о том, чего сейчас ждёт менеджер: подпись, акцепт оферты или срок приёмки. */
 export function WorkflowNotice({ request }: { request: RequestView }) {
+  const { activeRole, user } = useSession();
   const manager = useIsRequestManager(request);
+  if (isSelfApproval(request, activeRole, user?.id)) {
+    return (
+      <Notice tone="waiting" testId="approval-self">
+        {texts.approval.selfApproval}
+      </Notice>
+    );
+  }
   if (!manager) return null;
 
   let text: string | null = null;

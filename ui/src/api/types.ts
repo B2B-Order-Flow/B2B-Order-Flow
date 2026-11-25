@@ -317,6 +317,10 @@ export interface StageView {
   id: string;
   requestId: string;
   requestNumber?: string;
+  /** Для очередей и «Моих задач» (неделя 3). */
+  companyName?: string;
+  address?: string;
+  sla?: StageSlaSummary;
   type: StageType;
   status: StageStatus;
   queueRole?: Role;
@@ -433,4 +437,64 @@ export interface NotificationView {
 
 export interface NotificationQuery extends PageQuery {
   unread?: boolean;
+}
+
+// Неделя 3: согласования, справочники, план маршрута (core-api.yaml, контракт недели 3).
+
+export type ApprovalDecision = 'APPROVE' | 'RETURN' | 'REJECT';
+
+export interface StageDecisionPayload {
+  decision: ApprovalDecision;
+  /** Обязателен для RETURN и REJECT. */
+  comment?: string;
+  /** Код из rejection_reason для шага согласования; обязателен для REJECT. */
+  reasonCode?: string;
+  version: number;
+}
+
+export type StageSlaStatus = 'RUNNING' | 'PAUSED' | 'BREACHED' | 'STOPPED';
+
+/** Краткая сводка срока этапа для очередей; полный SLA — GET /requests/{id}/sla. */
+export interface StageSlaSummary {
+  status: StageSlaStatus;
+  dueAt?: string;
+  /** Остаток рабочего времени в минутах; отрицательный — просрочка. */
+  remainingMinutes?: number;
+  overdue?: boolean;
+}
+
+export type DictionaryName =
+  'pause-reasons' | 'cancel-reasons' | 'rejection-reasons' | 'contract-types' | 'attachment-kinds';
+
+export interface DictionaryItem {
+  code: string;
+  title: string;
+  stageType?: StageType;
+  party?: string;
+  requiresComment?: boolean;
+  automatic?: boolean;
+}
+
+export interface DictionaryView {
+  name: DictionaryName;
+  items: DictionaryItem[];
+}
+
+/** Этап плана маршрута; stageId и status пусты, пока этап не создан. */
+export interface RouteStageView {
+  stageId?: string;
+  type: StageType;
+  queueRole?: Role;
+  status?: StageStatus;
+  /** Волна согласований: 0 — вне волн, 1 — профильные, 2 — управленческое. */
+  wave: number;
+  requiredByRules: string[];
+}
+
+export interface RouteView {
+  requestId: string;
+  routeVersion: number;
+  requestClass?: 'STANDARD' | 'EXTENDED' | 'LARGE';
+  construction?: boolean;
+  stages: RouteStageView[];
 }
