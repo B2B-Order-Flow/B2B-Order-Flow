@@ -72,6 +72,12 @@ tags:
     description: Доработка заявки, ревизии и план маршрута
   - name: Approvals
     description: Решения согласующих по этапам согласования
+  - name: Execution
+    description: Проблемы исполнения на объекте
+  - name: Contract
+    description: Изменение условий договора и претензия до приёмки
+  - name: Cancellation
+    description: Отмена заявки и запросы на отмену
 paths:
   /internal/v1/auth/register:
     post:
@@ -1602,6 +1608,451 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/problem:
+    post:
+      operationId: reportStageProblem
+      tags: [Execution]
+      summary: Сообщить о проблеме на объекте (T15, EC-11, EC-22)
+      description: |
+        Инженер сообщает о проблеме на этапе исполнения. `NO_ACCESS` — EC-11: заявка
+        остаётся в `IN_EXECUTION`, координатор получает уведомление и ставит ручную
+        паузу `NO_ACCESS` через `POST /stages/{stageId}/sla/pause`. `CONNECTION_IMPOSSIBLE`
+        — EC-22: T15, заявка переходит в `TECH_CHECK`, создаётся этап `RECHECK_TECH`,
+        таймер этапа исполнения встаёт на автопаузу `RECHECK_TECH`; уровень обязательств
+        не снижается (docs/system/status-model.md, 6.1 и 7). Комментарий обязателен.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageProblemPayload'
+      responses:
+        '200':
+          description: Проблема зафиксирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/contract/change-request:
+    post:
+      operationId: requestContractChange
+      tags: [Contract]
+      summary: Зафиксировать просьбу клиента изменить условия договора (T12)
+      description: |
+        Менеджер заявки фиксирует просьбу клиента до подписания. Заявка переходит
+        `CONTRACT_SIGNING → REWORK` (T12), этап подписания встаёт на автопаузу `REWORK`,
+        менеджер правит данные и отправляет заявку повторно (T10). Комментарий
+        обязателен: что именно просит изменить клиент.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractChangeRequestPayload'
+      responses:
+        '200':
+          description: Заявка возвращена на доработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/defect-claim:
+    post:
+      operationId: fileDefectClaim
+      tags: [Contract]
+      summary: Претензия клиента до приёмки (T17)
+      description: |
+        Клиент заявляет мотивированную претензию в статусе `ACTIVATED` до закрытия.
+        Создаётся этап `REMEDIATION` в очереди инженеров, срок приёмки останавливается
+        (`STOPPED`); после устранения замечаний менеджер снова отправляет акт, и срок
+        приёмки запускается заново (docs/system/status-model.md, T17; sla.md, 8).
+        Заявка остаётся в `ACTIVATED`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DefectClaimPayload'
+      responses:
+        '200':
+          description: Претензия принята, создан этап устранения замечаний
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/cancel:
+    post:
+      operationId: cancelRequest
+      tags: [Cancellation]
+      summary: Односторонняя отмена заявки (T19)
+      description: |
+        Односторонняя отмена по матрице уровней обязательств
+        (docs/system/status-model.md, 6.3). Причина обязательна и берётся из
+        `cancel_reason` для стороны инициатора; если причина требует комментария
+        (`requires_comment`), он обязателен. После активации отмена запрещена —
+        `409 CANCEL_AFTER_ACTIVATION` (EC-09). Если способ отмены не соответствует
+        уровню обязательств — `409 CANCEL_METHOD_NOT_ALLOWED`. Открытые этапы
+        отменяются, таймеры останавливаются, создаётся запись `cancellation_request`
+        со способом `UNILATERAL`. Заявка переходит в `CANCELLED`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationReasonPayload'
+      responses:
+        '200':
+          description: Заявка отменена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/cancellation-requests:
+    get:
+      operationId: listCancellationRequests
+      tags: [Cancellation]
+      summary: Запросы на отмену заявки
+      description: |
+        Текущий и прошлые запросы на отмену, новые сверху. Клиент видит только заявки
+        своей компании; служебные поля (кто утвердил и подтвердил затраты) доступны
+        только ролям оператора. Ограничение: не более одного запроса в статусе `OPEN`
+        на заявку (docs/system/domain-model.md, 4.5).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница запросов на отмену
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createCancellationRequest
+      tags: [Cancellation]
+      summary: Запрос на отмену по соглашению (T20)
+      description: |
+        Клиент на уровне обязательств 2 или менеджер на уровнях 1–2 создаёт запрос на
+        отмену. Сохраняется `previousStatus`, этапы замораживаются, SLA этапов встаёт
+        на паузу `CANCEL_REVIEW`, запускается контрольный срок `CANCEL_RESPONSE`
+        (docs/system/status-model.md, T20). Второй открытый запрос —
+        `409 CANCEL_REQUEST_EXISTS`; способ не соответствует уровню —
+        `409 CANCEL_METHOD_NOT_ALLOWED`; после активации —
+        `409 CANCEL_AFTER_ACTIVATION` (EC-09). Создание идемпотентно по
+        `Idempotency-Key`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationReasonPayload'
+      responses:
+        '201':
+          description: Запрос на отмену создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/costs:
+    post:
+      operationId: setCancellationCosts
+      tags: [Cancellation]
+      summary: Сумма фактических затрат к компенсации
+      description: |
+        Менеджер фиксирует сумму и расшифровку затрат для отмены по инициативе клиента
+        на уровне 2 (docs/business/business-process.md, 11.4). Сумма и позиции передаются
+        строкой с двумя знаками. После подтверждения финансовым контролёром условия
+        отмены считаются готовыми (`CANCEL_TERMS_READY`). Для запросов оператора и для
+        уровня 1 затраты не выставляются — `409 ILLEGAL_TRANSITION`.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationCostsPayload'
+      responses:
+        '200':
+          description: Сумма затрат зафиксирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/confirm-costs:
+    post:
+      operationId: confirmCancellationCosts
+      tags: [Cancellation]
+      summary: Подтвердить или вернуть сумму затрат
+      description: |
+        Финансовый контролёр подтверждает сумму (`confirmed = true`) или возвращает её
+        менеджеру с комментарием (`confirmed = false`; комментарий обязателен). До
+        подтверждения клиент не может принять условия отмены.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmCostsPayload'
+      responses:
+        '200':
+          description: Решение по сумме затрат принято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/approve:
+    post:
+      operationId: approveCancellation
+      tags: [Cancellation]
+      summary: Утвердить отмену по инициативе оператора (T21, T21b)
+      description: |
+        Руководитель B2B утверждает запрос на отмену, созданный оператором, либо
+        одностороннюю отмену по объективной причине `CONNECTION_IMPOSSIBLE` после
+        отказа клиента (T21b). Для инициативы клиента не применяется: условия принимает
+        клиент (`accept`). Заявка переходит в `CANCELLED`.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Отмена утверждена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/accept:
+    post:
+      operationId: acceptCancellation
+      tags: [Cancellation]
+      summary: Принять условия отмены (T21)
+      description: |
+        Клиент принимает условия отмены по соглашению; для инициативы оператора —
+        после утверждения руководителем B2B. Заявка переходит в `CANCELLED`, открытые
+        этапы отменяются, таймеры останавливаются, итог уходит всем участникам.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Условия отмены приняты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/reject:
+    post:
+      operationId: rejectCancellation
+      tags: [Cancellation]
+      summary: Отклонить запрос на отмену или условия (T22)
+      description: |
+        Клиент отклоняет условия оператора, руководитель B2B отклоняет инициативу
+        оператора; комментарий обязателен. Если причина оператора объективная
+        (`CONNECTION_IMPOSSIBLE`), отказ клиента не возвращает заявку: она остаётся
+        в `CANCEL_REQUESTED`, решение принимает руководитель B2B (T21b или T22).
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRejectPayload'
+      responses:
+        '200':
+          description: Запрос на отмену отклонён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/withdraw:
+    post:
+      operationId: withdrawCancellation
+      tags: [Cancellation]
+      summary: Отозвать запрос на отмену (T22, EC-21)
+      description: |
+        Клиент или менеджер отзывает свой запрос на отмену. Заявка возвращается
+        в `previousStatus`, этапы и SLA возобновляются, время запроса учитывается
+        как пауза.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Запрос на отмену отозван
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     internalToken:
@@ -1638,6 +2089,13 @@ components:
         format: uuid
     CompanyId:
       name: companyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CancellationId:
+      name: cancellationId
       in: path
       required: true
       schema:
@@ -2948,3 +3406,226 @@ components:
         overdue:
           type: boolean
           description: Норматив уже исчерпан
+    StageProblem:
+      type: string
+      description: |
+        Проблема на объекте: `NO_ACCESS` — нет доступа (EC-11, ручная пауза
+        координатора), `CONNECTION_IMPOSSIBLE` — подключение невозможно по факту
+        (EC-22, повторная ТВ).
+      enum: [NO_ACCESS, CONNECTION_IMPOSSIBLE]
+    StageProblemPayload:
+      type: object
+      description: Сообщение инженера о проблеме на объекте (T15, EC-11, EC-22).
+      required: [problem, comment, version]
+      properties:
+        problem:
+          $ref: '#/components/schemas/StageProblem'
+        comment:
+          type: string
+          maxLength: 4000
+          description: Что произошло на объекте
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ContractChangeRequestPayload:
+      type: object
+      description: Просьба клиента изменить условия договора (T12).
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          maxLength: 4000
+          description: Что именно просит изменить клиент
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    DefectClaimPayload:
+      type: object
+      description: Мотивированная претензия клиента до приёмки (T17).
+      required: [reason, version]
+      properties:
+        reason:
+          type: string
+          maxLength: 4000
+          description: В чём состоит замечание к услуге
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationInitiator:
+      type: string
+      description: Сторона, инициировавшая отмену.
+      enum: [CLIENT, OPERATOR]
+    CancellationMethod:
+      type: string
+      description: Способ отмены (docs/system/business-process.md, 11.3).
+      enum: [UNILATERAL, AGREEMENT]
+    CancellationStatus:
+      type: string
+      description: Статус запроса на отмену (docs/system/domain-model.md, 4.5).
+      enum: [OPEN, ACCEPTED, WITHDRAWN, REJECTED, EXPIRED]
+    CancellationReasonPayload:
+      type: object
+      description: |
+        Причина односторонней отмены (T19) или запроса на отмену (T20). Код берётся
+        из `cancel_reason` для стороны инициатора; если у причины `requires_comment`,
+        комментарий обязателен. `version` — версия заявки.
+      required: [reasonCode, version]
+      properties:
+        reasonCode:
+          type: string
+          description: Код из справочника `cancel_reason`; неизвестный код — `422 VALIDATION_FAILED`
+        comment:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationCostItem:
+      type: object
+      required: [description, amount]
+      properties:
+        description:
+          type: string
+          maxLength: 500
+        amount:
+          type: string
+          pattern: '^[0-9]+\.[0-9]{2}$'
+          example: '45000.00'
+    CancellationCostsPayload:
+      type: object
+      description: |
+        Сумма фактических затрат к компенсации с расшифровкой (уровень 2, инициатива
+        клиента). `version` — версия запроса на отмену.
+      allOf:
+        - $ref: '#/components/schemas/VersionedAction'
+        - type: object
+          required: [amount, breakdown]
+          properties:
+            amount:
+              type: string
+              pattern: '^[0-9]+\.[0-9]{2}$'
+              example: '45000.00'
+            breakdown:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/CancellationCostItem'
+            comment:
+              type: string
+              maxLength: 4000
+    ConfirmCostsPayload:
+      type: object
+      required: [confirmed, version]
+      properties:
+        confirmed:
+          type: boolean
+          description: '`true` — сумма подтверждена; `false` — возвращена менеджеру'
+        comment:
+          type: string
+          maxLength: 4000
+          description: Обязателен при `confirmed = false`
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationRejectPayload:
+      type: object
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          maxLength: 4000
+          description: Причина отклонения; обязательна
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationRequestView:
+      type: object
+      required:
+        - id
+        - requestId
+        - requestStatus
+        - initiator
+        - method
+        - levelAtRequest
+        - status
+        - reasonCode
+        - requestedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        requestStatus:
+          $ref: '#/components/schemas/RequestStatus'
+        initiator:
+          $ref: '#/components/schemas/CancellationInitiator'
+        method:
+          $ref: '#/components/schemas/CancellationMethod'
+        levelAtRequest:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: Уровень обязательств на момент запроса
+        status:
+          $ref: '#/components/schemas/CancellationStatus'
+        reasonCode:
+          type: string
+        reasonComment:
+          type: string
+        previousStatus:
+          $ref: '#/components/schemas/RequestStatus'
+          description: Куда вернуться при отзыве, отклонении или истечении (T22)
+        costAmount:
+          type: string
+          example: '45000.00'
+          description: Сумма к компенсации; только уровень 2 по инициативе клиента
+        costBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/CancellationCostItem'
+        costFixedBy:
+          type: string
+          format: uuid
+          description: Менеджер, зафиксировавший сумму
+        costConfirmedBy:
+          type: string
+          format: uuid
+          description: Финансовый контролёр, подтвердивший сумму
+        approvedBy:
+          type: string
+          format: uuid
+          description: Руководитель B2B, утвердивший отмену
+        requestedBy:
+          type: string
+          format: uuid
+        requestedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+        termsReady:
+          type: boolean
+          description: Условия отмены готовы к принятию клиентом
+        version:
+          type: integer
+          format: int64
+    CancellationRequestPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CancellationRequestView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
