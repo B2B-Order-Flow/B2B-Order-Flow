@@ -219,11 +219,31 @@ async def test_extend_pause_validates_contract_body():
 
 
 @pytest.mark.asyncio
-async def test_removed_week_three_routes_are_not_available():
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
-        response = await api.get("/api/v1/requests/request-1/offers")
-        decision = await api.post("/api/v1/stages/stage-1/decision", json={"version": 1})
+async def test_week_three_stage_decision_is_proxied():
+    captured: dict[str, object] = {}
 
-    assert response.status_code == 404
-    assert decision.status_code == 404
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["body"] = request.content
+        return httpx.Response(200, json={"ok": True})
+
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(handler),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            response = await api.post(
+                "/api/v1/stages/stage-1/decision",
+                json={"decision": "APPROVE", "version": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert captured["path"] == "/internal/v1/stages/stage-1/decision"
+    assert b'"decision":"APPROVE"' in captured["body"]

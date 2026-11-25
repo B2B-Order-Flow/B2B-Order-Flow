@@ -70,3 +70,27 @@ class PauseCommand(Command):
 
 class ExtendPauseCommand(Command):
     comment: str = Field(max_length=4000)
+
+
+class FlexibleCommand(Command):
+    """Week-three command envelope; field-level business rules stay in core."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class StageReturnCommand(Command):
+    comment: str = Field(min_length=1, max_length=4000)
+
+
+class StageProblemCommand(Command):
+    problemCode: str = Field(min_length=1, max_length=100)
+    comment: str | None = Field(default=None, max_length=4000)
+
+
+class CancelCommand(Command):
+    reasonCode: str = Field(min_length=1, max_length=100)
+    comment: str | None = Field(default=None, max_length=4000)
+
+
+class CommentCommand(Command):
+    comment: str = Field(min_length=1, max_length=4000)

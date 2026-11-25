@@ -15,11 +15,17 @@ from .errors import CoreClientError, core_client_error_handler, internal_error_h
 from .headers import correlation_id_context, correlation_middleware
 from .models import (
     AssignStageCommand,
+    CancelCommand,
     Command,
+    CommentCommand,
     CommercialTerms,
     ContractConcludedCommand,
+    DecisionCommand,
     ExtendPauseCommand,
+    FlexibleCommand,
     PauseCommand,
+    StageProblemCommand,
+    StageReturnCommand,
     TechResultCommand,
 )
 from .proxy import proxy
@@ -222,6 +228,33 @@ async def delete_request(request_id: str, request: Request, client: CoreClient =
     return await proxy(request, client, "DELETE", f"/api/v1/requests/{request_id}")
 
 
+@app.patch("/api/v1/requests/{request_id}/data", operation_id="update_request_data")
+async def update_request_data(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/data", FlexibleCommand)
+
+
+@app.post("/api/v1/requests/{request_id}/resubmit", operation_id="resubmit_request")
+async def resubmit_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/resubmit")
+
+
+@app.get("/api/v1/requests/{request_id}/revisions", operation_id="request_revisions")
+async def request_revisions(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/revisions")
+
+
+@app.get("/api/v1/requests/{request_id}/route", operation_id="request_route")
+async def request_route(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/route")
+
+
+@app.post("/api/v1/requests/{request_id}/from-rejected", operation_id="create_request_from_rejected")
+async def create_request_from_rejected(
+    request_id: str, request: Request, client: CoreClient = Depends(get_core_client)
+):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/from-rejected", Command)
+
+
 @app.api_route("/api/v1/requests/{request_id}/recheck-data", methods=["POST"])
 async def recheck_data(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(
@@ -308,6 +341,21 @@ async def tech_result(stage_id: str, request: Request, client: CoreClient = Depe
     )
 
 
+@app.post("/api/v1/stages/{stage_id}/decision", operation_id="decide_stage")
+async def decide_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/decision", DecisionCommand)
+
+
+@app.post("/api/v1/stages/{stage_id}/return", operation_id="return_stage")
+async def return_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/return", StageReturnCommand)
+
+
+@app.post("/api/v1/stages/{stage_id}/problem", operation_id="stage_problem")
+async def stage_problem(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/stages/{stage_id}/problem", StageProblemCommand)
+
+
 @app.post("/api/v1/stages/{stage_id}/complete", operation_id="complete_stage")
 async def complete_stage(stage_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await proxy(
@@ -356,6 +404,93 @@ async def act_signed(request_id: str, request: Request, client: CoreClient = Dep
 @app.post("/api/v1/requests/{request_id}/close-by-default", operation_id="close_by_default")
 async def close_by_default(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await request_command(request, client, f"/api/v1/requests/{request_id}/close-by-default")
+
+
+@app.post("/api/v1/requests/{request_id}/contract/change-request", operation_id="contract_change_request")
+async def contract_change_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(
+        request, client, f"/api/v1/requests/{request_id}/contract/change-request", CommentCommand
+    )
+
+
+@app.post("/api/v1/requests/{request_id}/defect-claim", operation_id="defect_claim")
+async def defect_claim(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/defect-claim", CommentCommand)
+
+
+@app.post("/api/v1/requests/{request_id}/cancel", operation_id="cancel_request")
+async def cancel_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/cancel", CancelCommand)
+
+
+@app.post("/api/v1/requests/{request_id}/cancellation-requests", operation_id="create_cancellation_request")
+async def create_cancellation_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(
+        request, client, f"/api/v1/requests/{request_id}/cancellation-requests", FlexibleCommand
+    )
+
+
+@app.get("/api/v1/requests/{request_id}/cancellation-requests", operation_id="list_cancellation_requests")
+async def list_cancellation_requests(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/requests/{request_id}/cancellation-requests")
+
+
+async def cancellation_command(
+    cancellation_id: str, request: Request, client: CoreClient, action: str, model: type[Command] = Command
+):
+    return await request_command(request, client, f"/api/v1/cancellation-requests/{cancellation_id}/{action}", model)
+
+
+@app.post("/api/v1/cancellation-requests/{cancellation_id}/costs", operation_id="set_cancellation_costs")
+async def set_cancellation_costs(cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await cancellation_command(cancellation_id, request, client, "costs", FlexibleCommand)
+
+
+@app.post("/api/v1/cancellation-requests/{cancellation_id}/confirm-costs", operation_id="confirm_cancellation_costs")
+async def confirm_cancellation_costs(
+    cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)
+):
+    return await cancellation_command(cancellation_id, request, client, "confirm-costs", FlexibleCommand)
+
+
+@app.post("/api/v1/cancellation-requests/{cancellation_id}/approve", operation_id="approve_cancellation")
+async def approve_cancellation(cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await cancellation_command(cancellation_id, request, client, "approve")
+
+
+@app.post("/api/v1/cancellation-requests/{cancellation_id}/accept", operation_id="accept_cancellation")
+async def accept_cancellation(cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await cancellation_command(cancellation_id, request, client, "accept")
+
+
+@app.post("/api/v1/cancellation-requests/{cancellation_id}/reject", operation_id="reject_cancellation")
+async def reject_cancellation(cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await cancellation_command(cancellation_id, request, client, "reject", CommentCommand)
+
+
+@app.post("/api/v1/cancellation-requests/{cancellation_id}/withdraw", operation_id="withdraw_cancellation")
+async def withdraw_cancellation(cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await cancellation_command(cancellation_id, request, client, "withdraw")
+
+
+@app.get("/api/v1/dictionaries/{name}", operation_id="get_dictionary")
+async def get_dictionary(name: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/dictionaries/{name}")
+
+
+@app.get("/api/v1/archive/requests", operation_id="list_archived_requests")
+async def list_archived_requests(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", "/api/v1/archive/requests")
+
+
+@app.post("/api/v1/exports/requests", operation_id="create_requests_export")
+async def create_requests_export(request: Request, client: CoreClient = Depends(get_core_client)):
+    return await request_command(request, client, "/api/v1/exports/requests", FlexibleCommand)
+
+
+@app.get("/api/v1/exports/{export_id}", operation_id="get_requests_export")
+async def get_requests_export(export_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
+    return await proxy(request, client, "GET", f"/api/v1/exports/{export_id}")
 
 
 @app.get("/api/v1/requests/{request_id}/sla", operation_id="request_sla")
