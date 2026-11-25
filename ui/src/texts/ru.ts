@@ -8,6 +8,7 @@ import type {
   PauseReason,
   RequestStatus,
   Role,
+  SlaTimerKind,
   StageType,
   StageStatus,
   TariffType,
@@ -483,6 +484,27 @@ export const texts = {
     claimed: 'Заявка взята в работу',
     alreadyTaken: 'Заявку уже взял другой менеджер',
     empty: 'Нет заявок, ожидающих менеджера',
+  },
+
+  // Блок «Сроки» в карточке заявки (sla.md §8 и §10)
+  sla: {
+    title: 'Сроки',
+    stages: 'Этапы',
+    control: 'Контрольные сроки заявки',
+    pauses: 'Журнал пауз',
+    loadError: 'Не удалось загрузить сроки заявки',
+    stageFallback: 'Этап',
+    kinds: {
+      DATA_CHECK: 'Проверка данных',
+      MANAGER_ASSIGNMENT: 'Назначение менеджера',
+      TECH_RESULT: 'Результат проверки ТВ',
+      ACCEPTANCE: 'Приёмка услуги',
+      CANCEL_RESPONSE: 'Ответ на запрос об отмене',
+    } satisfies Record<Exclude<SlaTimerKind, 'STAGE_SLA'>, string>,
+    pausePeriod: (from: string, to: string) => `${from} — ${to}`,
+    pauseOngoing: (from: string) => `с ${from}, идёт`,
+    pauseLimit: (date: string) => `предел ${date}`,
+    pauseExtended: (count: number) => `продлений: ${count}`,
   },
 
   pauseReason: {
