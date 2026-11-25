@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: B2B-Order-Flow Core API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Внутренний контракт транзакционного ядра B2B-Order-Flow. Единственный источник истины
     для API: серверные интерфейсы генерируются из этого файла (`openapi-generator`), контроллеры
@@ -36,11 +36,14 @@ info:
     Бизнес-валидация, права, статусы, принадлежность компании и фильтрация полей по роли.
     BFF проксирует ответ без фильтрации.
 
-    ## Неделя 2
-    Контракт недели 2 покрывает переходы SC-01: T04, T05, T07, T13, T14, T16, T18
-    (docs/plan-week2.md, раздел 2). Согласования, стройка, доработка, отмена и повторная
-    техническая возможность появятся на неделе 3: их эндпоинтов здесь нет, а результат ТВ
-    `WITH_CONSTRUCTION` до недели 3 отклоняется с `409 ILLEGAL_TRANSITION`.
+    ## Недели 2 и 3
+    Контракт недели 2 покрывает переходы SC-01: T04, T05, T07, T13, T14, T16, T18.
+    Контракт недели 3 добавляет доработку и пересборку маршрута (T09, T09b, T10, T12),
+    согласования параллельными волнами (T06, T08, T11), стройку и повторную ТВ
+    (T15, T15b), претензию до приёмки (T17) и отмену по уровням обязательств
+    (T19–T22), а также справочники причин (docs/plan-week3.md, раздел 2).
+    Архив, экспорт и новая заявка на основе отклонённой (П2) в контракт не входят:
+    они появятся отдельным изменением вместе с реализацией.
 servers:
   - url: http://core-service:8080
     description: Приватная сеть Docker Compose
@@ -78,6 +81,8 @@ tags:
     description: Изменение условий договора и претензия до приёмки
   - name: Cancellation
     description: Отмена заявки и запросы на отмену
+  - name: Dictionaries
+    description: Справочники причин, типов договоров и видов вложений
 paths:
   /internal/v1/auth/register:
     post:
@@ -2053,6 +2058,42 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /internal/v1/dictionaries/{name}:
+    get:
+      operationId: getDictionary
+      tags: [Dictionaries]
+      summary: Справочник причин и типов
+      description: |
+        Активные значения справочника `name`. `rejection-reasons` можно сузить по шагу
+        `stageType` (тип этапа ТВ или согласования): интерфейс показывает причины своего
+        шага и всегда добавляет `OTHER` (docs/system/api-contract.md, 6.11;
+        docs/business/business-process.md, 11.6). Неизвестный справочник —
+        `404 NOT_FOUND`.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/DictionaryName'
+        - name: stageType
+          in: query
+          required: false
+          description: 'Шаг для `rejection-reasons`: `TECH_CHECK` или тип согласования'
+          schema:
+            $ref: '#/components/schemas/StageType'
+      responses:
+        '200':
+          description: Значения справочника
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictionaryView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     internalToken:
@@ -3629,3 +3670,49 @@ components:
             $ref: '#/components/schemas/CancellationRequestView'
         page:
           $ref: '#/components/schemas/PageInfo'
+    DictionaryName:
+      type: string
+      description: |
+        Имя справочника: причины паузы, причины отмены, причины отклонения, типы
+        договоров, виды вложений (docs/system/api-contract.md, 6.11).
+      enum:
+        - pause-reasons
+        - cancel-reasons
+        - rejection-reasons
+        - contract-types
+        - attachment-kinds
+    DictionaryParty:
+      type: string
+      description: Сторона, которой доступна причина отмены.
+      enum: [CLIENT, OPERATOR]
+    DictionaryItem:
+      type: object
+      required: [code, title]
+      properties:
+        code:
+          type: string
+          example: OTHER
+        title:
+          type: string
+          example: Другая причина
+        stageType:
+          $ref: '#/components/schemas/StageType'
+          description: Шаг, к которому относится причина отклонения
+        party:
+          $ref: '#/components/schemas/DictionaryParty'
+        requiresComment:
+          type: boolean
+          description: Комментарий обязателен вместе с этим кодом
+        automatic:
+          type: boolean
+          description: Причина паузы ставится системой, а не вручную
+    DictionaryView:
+      type: object
+      required: [name, items]
+      properties:
+        name:
+          $ref: '#/components/schemas/DictionaryName'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictionaryItem'
