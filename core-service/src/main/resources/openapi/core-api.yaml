@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: B2B-Order-Flow Core API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Внутренний контракт транзакционного ядра B2B-Order-Flow. Единственный источник истины
     для API: серверные интерфейсы генерируются из этого файла (`openapi-generator`), контроллеры
@@ -41,9 +41,9 @@ info:
     Контракт недели 3 добавляет доработку и пересборку маршрута (T09, T09b, T10, T12),
     согласования параллельными волнами (T06, T08, T11), стройку и повторную ТВ
     (T15, T15b), претензию до приёмки (T17) и отмену по уровням обязательств
-    (T19–T22), а также справочники причин (docs/plan-week3.md, раздел 2).
-    Архив, экспорт и новая заявка на основе отклонённой (П2) в контракт не входят:
-    они появятся отдельным изменением вместе с реализацией.
+    (T19–T22), справочники причин (docs/plan-week3.md, раздел 2), а также операции П2:
+    новую заявку на основе отклонённой, архив и асинхронный экспорт. Операции П2
+    описаны контрактом; их реализация — отдельная задача.
 servers:
   - url: http://core-service:8080
     description: Приватная сеть Docker Compose
@@ -83,6 +83,10 @@ tags:
     description: Отмена заявки и запросы на отмену
   - name: Dictionaries
     description: Справочники причин, типов договоров и видов вложений
+  - name: FollowUp
+    description: Новая заявка на основе отклонённой (EC-01)
+  - name: Archive
+    description: Архив заявок и асинхронный экспорт
 paths:
   /internal/v1/auth/register:
     post:
@@ -1542,6 +1546,50 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/from-rejected:
+    post:
+      operationId: createRequestFromRejected
+      tags: [FollowUp]
+      summary: Создать новую заявку на основе отклонённой (EC-01)
+      description: |
+        Представитель компании создаёт новую заявку на основе отклонённой по ТВ
+        (`status = REJECTED`). Поля исходной заявки и выбранного предложения услуги
+        копируются, новая заявка начинается с черновика (`DRAFT`) и хранит связь
+        `parentRequestId` с исходной; сама отклонённая заявка не меняется. Доступна
+        только заявка своей компании, чужая — `404`. Неотклонённая заявка —
+        `409 ILLEGAL_TRANSITION`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '201':
+          description: Новая заявка создана
+          headers:
+            Location:
+              description: Ссылка на новую заявку
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /internal/v1/stages/{stageId}/decision:
     post:
       operationId: decideStage
@@ -2129,6 +2177,129 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /internal/v1/archive/requests:
+    get:
+      operationId: listArchivedRequests
+      tags: [Archive]
+      summary: Поиск заявок в архиве
+      description: |
+        Те же заявки, что и в `GET /internal/v1/requests`, включая закрытые
+        (`CLOSED`, `REJECTED`, `CANCELLED`). Отдельного хранилища нет: архив —
+        вычисляемый признак, поэтому доступ, фильтрация и сортировка идут по тем же
+        правилам. Клиент видит только заявки своей компании, администратор — `403`.
+        Фильтры и сортировка — только по колонкам; фильтр по полю JSONB возвращает
+        `422 VALIDATION_FAILED` (docs/system/archive-export.md, 4).
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Статус заявки; список статусов передаётся повторением параметра
+          schema:
+            $ref: '#/components/schemas/RequestStatus'
+        - name: closedFrom
+          in: query
+          required: false
+          description: Дата закрытия, включительно
+          schema:
+            type: string
+            format: date
+        - name: closedTo
+          in: query
+          required: false
+          description: Дата закрытия, включительно
+          schema:
+            type: string
+            format: date
+        - name: segment
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница заявок архива
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/exports/requests:
+    post:
+      operationId: createRequestsExport
+      tags: [Archive]
+      summary: Запустить асинхронный экспорт заявок
+      description: |
+        `CSV` — список заявок по фильтрам архива, `PDF` — досье одной заявки
+        (`requestId`). Экспорт не выходит за права пользователя: клиент выгружает
+        только свою компанию, в его выгрузке нет исполнителей, внутренних
+        комментариев и SLA. Лимит — 50 000 строк (`422 EXPORT_TOO_LARGE`);
+        второй одновременный экспорт пользователя — `429 EXPORT_IN_PROGRESS`
+        (docs/system/archive-export.md, 6). Готовность приходит событием
+        `EXPORT_READY`; файл результата живёт 24 часа.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequestPayload'
+      responses:
+        '202':
+          description: Задание экспорта принято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/exports/{exportId}:
+    get:
+      operationId: getRequestsExport
+      tags: [Archive]
+      summary: Статус и ссылка на результат экспорта
+      description: |
+        Доступно автору экспорта; чужое задание — `404`. `downloadUrl` заполняется
+        только в статусе `READY`, ссылка одноразовая, привязана к пользователю и
+        действует 24 часа. Каждый запрос экспорта и скачивание пишутся в `audit_log`.
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Задание экспорта
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     internalToken:
@@ -2239,6 +2410,14 @@ components:
             $ref: '#/components/schemas/Problem'
     ConflictError:
       description: Конфликт версии, статуса или повторного действия
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequestsError:
+      description: |
+        Превышен лимит: у пользователя уже выполняется экспорт (`EXPORT_IN_PROGRESS`)
+        или сработал ограничитель Nginx.
       content:
         application/problem+json:
           schema:
@@ -2547,6 +2726,12 @@ components:
         number:
           type: string
           example: REQ-2026-000001
+        parentRequestId:
+          type: string
+          format: uuid
+          description: |
+            Исходная отклонённая заявка, если эта создана через
+            `POST /internal/v1/requests/{requestId}/from-rejected` (EC-01).
         companyId:
           type: string
           format: uuid
@@ -3764,3 +3949,86 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DictionaryItem'
+    ExportFormat:
+      type: string
+      description: |
+        Формат выгрузки: `CSV` — список заявок по фильтрам, `PDF` — досье одной
+        заявки (docs/system/archive-export.md, 6).
+      enum: [CSV, PDF]
+    ExportStatus:
+      type: string
+      description: |
+        Статус задания экспорта: `QUEUED` — принято, `RUNNING` — выполняется,
+        `READY` — готово, `FAILED` — ошибка, `EXPIRED` — файл удалён по сроку.
+      enum: [QUEUED, RUNNING, READY, FAILED, EXPIRED]
+    ExportFilters:
+      type: object
+      additionalProperties: true
+      description: |
+        Фильтры CSV-выгрузки; имена и правила — docs/system/archive-export.md, 4.
+        Допустимы только колонки: фильтр по полю JSONB возвращает
+        `422 VALIDATION_FAILED`. Набор совпадает с фильтрами архива.
+      properties:
+        q:
+          type: string
+          description: Полнотекстовый поиск по номеру, адресу и названию компании
+        companyId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        segment:
+          type: string
+        closedFrom:
+          type: string
+          format: date
+        closedTo:
+          type: string
+          format: date
+    ExportRequestPayload:
+      type: object
+      description: |
+        Тело запуска экспорта. Для `PDF` обязателен `requestId`; для `CSV`
+        используется `filters` (без него выгружаются все доступные заявки).
+      required: [format]
+      properties:
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        requestId:
+          type: string
+          format: uuid
+          description: Заявка для `PDF`-досье; для `CSV` не передаётся
+        filters:
+          $ref: '#/components/schemas/ExportFilters'
+    ExportJobView:
+      type: object
+      required: [id, format, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        status:
+          $ref: '#/components/schemas/ExportStatus'
+        rowCount:
+          type: integer
+          description: Число строк в готовой выгрузке; для `PDF` равно 1
+        downloadUrl:
+          type: string
+          format: uri
+          description: Одноразовая ссылка на файл; только в статусе `READY`
+        expiresAt:
+          type: string
+          format: date-time
+          description: Момент удаления файла результата
+        errorCode:
+          type: string
+          example: EXPORT_TOO_LARGE
+          description: Машинный код ошибки при `status = FAILED`
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
