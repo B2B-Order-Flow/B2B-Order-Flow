@@ -296,6 +296,49 @@ describe('Волны согласований в маршруте', () => {
   });
 });
 
+describe('Причина «нет ТВ» и комментарий', () => {
+  it('комментарий обязателен только к OTHER, даже если справочник пометил другую причину', async () => {
+    const orlov = person('u-orlov', ['TECH_SPECIALIST']);
+    const tech = stage({
+      id: 's-tech',
+      type: 'TECH_CHECK',
+      status: 'IN_PROGRESS',
+      queueRole: 'TECH_SPECIALIST',
+      assigneeId: 'u-orlov',
+      version: 1,
+    });
+    const fetchMock = open('TECH_SPECIALIST', orlov, request([tech], { status: 'TECH_CHECK' }), {
+      'GET /dictionaries/rejection-reasons': () =>
+        jsonResponse(200, {
+          name: 'rejection-reasons',
+          items: [
+            {
+              code: 'TECH_NO_NETWORK',
+              title: 'Нет сети оператора в районе подключения',
+              stageType: 'TECH_CHECK',
+              requiresComment: true,
+            },
+          ],
+        }),
+      'POST /stages/s-tech/tech-result': () => jsonResponse(200, { ...tech, status: 'DONE' }),
+    });
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByTestId('tech-result-option-NONE'));
+    const select = screen.getByTestId('tech-reason');
+    await waitFor(() => expect(within(select).getAllByRole('option').length).toBe(3));
+    await user.selectOptions(select, 'TECH_NO_NETWORK');
+    await user.click(screen.getByTestId('action-tech-result'));
+    await user.click(await screen.findByTestId('action-tech-result-confirm'));
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/stages/s-tech/tech-result'))).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/stages/s-tech/tech-result'));
+    expect(bodyOf(call![1]!)).toEqual({ result: 'NONE', reasonCode: 'TECH_NO_NETWORK', version: 1 });
+  });
+});
+
 describe('Маршрут завершившейся заявки', () => {
   it.each(['REJECTED', 'CANCELLED'] as const)(
     '%s: только фактические этапы и решения, без «Будет создан позже»',
@@ -415,6 +458,63 @@ describe('Очереди согласующих', () => {
     expect(within(screen.getByTestId('queue-row-REQ-LATE')).getByTestId('stage-sla-cell')).toHaveTextContent(
       'просрочено на 2 д.',
     );
+  });
+
+  it('просроченный без остатка выше идущего с остатком в минуту', async () => {
+    sessionStore.setToken('jwt', 28800);
+    sessionStore.setActiveRole('LAWYER');
+    mockApi({
+      'GET /me': () => jsonResponse(200, lawyer),
+      'GET /stages': () =>
+        jsonResponse(200, {
+          ...empty,
+          content: [
+            queued('s-run', 'REQ-RUN', { status: 'RUNNING', remainingMinutes: 1 }),
+            queued('s-late', 'REQ-LATE', { status: 'BREACHED' }),
+          ],
+        }),
+    });
+    renderApp('/queue');
+
+    await screen.findByTestId('queue-row-REQ-LATE');
+    const order = screen.getAllByTestId(/^queue-row-/).map((el) => el.getAttribute('data-testid'));
+    expect(order).toEqual(['queue-row-REQ-LATE', 'queue-row-REQ-RUN']);
+    const late = within(screen.getByTestId('queue-row-REQ-LATE')).getByTestId('stage-sla-cell');
+    expect(late).toHaveTextContent('просрочено');
+    expect(late).toHaveAttribute('data-state', 'BREACHED');
+    expect(late).toHaveAttribute('data-overdue', 'true');
+  });
+
+  it('текст и data-state по одному правилу: пауза и завершение важнее просрочки', async () => {
+    sessionStore.setToken('jwt', 28800);
+    sessionStore.setActiveRole('LAWYER');
+    mockApi({
+      'GET /me': () => jsonResponse(200, lawyer),
+      'GET /stages': () =>
+        jsonResponse(200, {
+          ...empty,
+          content: [
+            queued('s-p', 'REQ-PAUSED', { status: 'PAUSED', remainingMinutes: -30, overdue: true }),
+            queued('s-s', 'REQ-STOPPED', { status: 'STOPPED', overdue: true }),
+            queued('s-r', 'REQ-RUNNING', { status: 'RUNNING' }),
+          ],
+        }),
+    });
+    renderApp('/queue');
+
+    const cell = async (number: string) =>
+      within(await screen.findByTestId(`queue-row-${number}`)).getByTestId('stage-sla-cell');
+    const paused = await cell('REQ-PAUSED');
+    expect(paused).toHaveTextContent('на паузе, срок нарушен');
+    expect(paused).toHaveAttribute('data-state', 'PAUSED');
+    expect(paused).toHaveAttribute('data-overdue', 'true');
+    const stopped = await cell('REQ-STOPPED');
+    expect(stopped).toHaveTextContent('завершён с просрочкой');
+    expect(stopped).toHaveAttribute('data-state', 'STOPPED');
+    const running = await cell('REQ-RUNNING');
+    expect(running).toHaveTextContent('идёт');
+    expect(running).toHaveAttribute('data-state', 'RUNNING');
+    expect(running).not.toHaveAttribute('data-overdue');
   });
 
   it('у руководителя B2B есть очередь управленческого согласования', () => {

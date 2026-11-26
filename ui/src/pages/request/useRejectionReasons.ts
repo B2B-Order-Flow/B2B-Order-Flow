@@ -29,8 +29,11 @@ export function useRejectionReasons(stageType: StageType) {
   return {
     loading: query.isPending,
     options: all.map((item) => ({ value: item.code, label: item.title })),
-    /** Комментарий обязателен к OTHER и к кодам, у которых так указано в справочнике. */
-    requiresComment: (code: string) =>
-      code === OTHER || Boolean(all.find((item) => item.code === code)?.requiresComment),
+    /**
+     * Комментарий обязателен только к OTHER — так в контракте tech-result (api-contract.md §10.8).
+     * Признак requiresComment из справочника пока не учитывается: ядро проверяет только OTHER,
+     * иначе интерфейс блокировал бы запрос, который ядро примет. Расширить — после решения Димы и Дениса.
+     */
+    requiresComment: (code: string) => code === OTHER,
   };
 }

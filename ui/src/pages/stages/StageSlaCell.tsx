@@ -1,10 +1,27 @@
 import Typography from '@mui/material/Typography';
-import type { StageView } from '../../api/types';
+import type { StageSlaSummary, StageView } from '../../api/types';
 import { formatDuration, isCalendarTimer } from '../../lib/sla';
 import { texts } from '../../texts/ru';
 import { c, type ColorToken } from '../../theme/tokens';
 
 const t = texts.queue.sla;
+
+type CellState = 'BREACHED' | 'RUNNING' | 'PAUSED' | 'STOPPED';
+
+/** Норматив нарушен: по признаку, по статусу или по отрицательному остатку. remainingMinutes необязателен. */
+const isOverdue = (sla: StageSlaSummary) =>
+  Boolean(sla.overdue) || sla.status === 'BREACHED' || (sla.remainingMinutes ?? 0) < 0;
+
+/**
+ * Одно правило для текста, data-state и сортировки: «завершён» и «на паузе» важнее просрочки,
+ * просрочка важнее «идёт». Сама просрочка у завершённого и приостановленного этапа видна в тексте
+ * и в атрибуте data-overdue.
+ */
+function cellState(sla: StageSlaSummary): CellState {
+  if (sla.status === 'STOPPED') return 'STOPPED';
+  if (sla.status === 'PAUSED') return 'PAUSED';
+  return isOverdue(sla) ? 'BREACHED' : 'RUNNING';
+}
 
 /**
  * Ячейка «Срок этапа» в очередях и «Моих задачах» по краткой сводке StageView.sla (решение Димы и
@@ -13,41 +30,64 @@ const t = texts.queue.sla;
  */
 export function StageSlaCell({ stage }: { stage: StageView }) {
   const sla = stage.sla;
-  let text = '—';
-  let color: ColorToken = 'text-muted';
-  const work = !isCalendarTimer({ kind: 'STAGE_SLA', stageType: stage.type });
-  if (sla) {
-    const minutes = sla.remainingMinutes;
-    if (sla.status === 'STOPPED') text = t.stopped;
-    else if (sla.status === 'PAUSED') text = t.paused;
-    else if (sla.overdue || sla.status === 'BREACHED') {
-      text = minutes !== undefined && minutes < 0 ? t.overdueBy(formatDuration(-minutes, work)) : t.overdue;
-      color = 'sla-breach-text';
-    } else if (minutes !== undefined) {
-      text = t.left(formatDuration(minutes, work));
-      color = 'text-primary';
-    }
+  if (!sla) {
+    return (
+      <Typography
+        variant="body1"
+        component="span"
+        sx={{ color: c('text-muted') }}
+        title={texts.queue.slaLater}
+        data-testid="stage-sla-cell"
+      >
+        —
+      </Typography>
+    );
   }
+
+  const work = !isCalendarTimer({ kind: 'STAGE_SLA', stageType: stage.type });
+  const minutes = sla.remainingMinutes;
+  const overdue = isOverdue(sla);
+  const state = cellState(sla);
+  let text: string;
+  let color: ColorToken = 'text-muted';
+  if (state === 'STOPPED') text = overdue ? t.stoppedOverdue : t.stopped;
+  else if (state === 'PAUSED') text = overdue ? t.pausedOverdue : t.paused;
+  else if (state === 'BREACHED') {
+    text = minutes !== undefined && minutes < 0 ? t.overdueBy(formatDuration(-minutes, work)) : t.overdue;
+    color = 'sla-breach-text';
+  } else {
+    text = minutes !== undefined ? t.left(formatDuration(minutes, work)) : t.running;
+    color = 'text-primary';
+  }
+
   return (
     <Typography
       variant="body1"
       component="span"
       sx={{ color: c(color) }}
-      title={sla ? undefined : texts.queue.slaLater}
       data-testid="stage-sla-cell"
-      data-state={sla?.overdue ? 'BREACHED' : sla?.status}
+      data-state={state}
+      data-overdue={overdue ? 'true' : undefined}
     >
       {text}
     </Typography>
   );
 }
 
-/** Сверху — этапы с меньшим остатком срока (просроченные первыми), без сводки — дольше ждущие. */
+const RANK: Record<CellState, number> = { BREACHED: 0, RUNNING: 1, PAUSED: 2, STOPPED: 3 };
+
+/**
+ * Порядок очереди: сначала просроченные (по величине просрочки, без остатка — как только что
+ * нарушенные), затем идущие по остатку, затем приостановленные и завершённые, без сводки — в конце.
+ * При равенстве выше этап, который дольше ждёт.
+ */
 export function byUrgency(a: StageView, b: StageView): number {
-  const left = (s: StageView) =>
-    s.sla && s.sla.status !== 'STOPPED' && s.sla.status !== 'PAUSED' && s.sla.remainingMinutes !== undefined
-      ? s.sla.remainingMinutes
-      : Number.POSITIVE_INFINITY;
-  const diff = left(a) - left(b);
-  return diff !== 0 && !Number.isNaN(diff) ? diff : Date.parse(a.createdAt) - Date.parse(b.createdAt);
+  const rank = (s: StageView) => (s.sla ? RANK[cellState(s.sla)] : 4);
+  const left = (s: StageView) => {
+    if (!s.sla) return Number.POSITIVE_INFINITY;
+    const minutes = s.sla.remainingMinutes;
+    if (cellState(s.sla) === 'BREACHED') return Math.min(minutes ?? 0, 0);
+    return minutes ?? Number.POSITIVE_INFINITY;
+  };
+  return rank(a) - rank(b) || Math.sign(left(a) - left(b)) || Date.parse(a.createdAt) - Date.parse(b.createdAt);
 }
