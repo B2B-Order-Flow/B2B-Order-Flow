@@ -501,6 +501,14 @@
 | Пороги маршрутизации и нормативы SLA | `ADMIN` | Раздел 6.11 [api-contract.md](../system/api-contract.md) | 4, если успеваем |
 | Выбор варианта услуги | КЛ, МП | Раздел 6.3 [api-contract.md](../system/api-contract.md) | 4 (П2), после утверждения системной части |
 
+### 9.2. Стройка (неделя 3)
+
+**Кто:** технический специалист, инженер. **Операции:** `POST /stages/{id}/tech-result` с `WITH_CONSTRUCTION`, `POST /stages/{id}/claim`, `POST /stages/{id}/complete`.
+
+- Результат ТВ «Есть со стройкой»: CAPEX (деньги, `"1200000.00"`) и срок стройки в календарных днях обязательны. Ядро добавляет в маршрут закупочное и финансовое согласования, при CAPEX выше порога — управленческое (EC-04).
+- После заключения договора первым этапом исполнения создаётся «Стройка» в очереди инженеров. Её можно взять в очереди или прямо в карточке («Взять этап "Стройка"»); взятие первого этапа исполнения — начало работ, уровень обязательств 2 (T14).
+- Инженер, взявший стройку, отмечает «Стройка завершена». Ядро создаёт «Монтаж и настройку» в очереди инженеров, в карточке появляется кнопка «Взять этап "Монтаж и настройка"». Дальше — как в SC-01.
+
 ## 10. Тексты ошибок
 
 Интерфейс ветвится по `code` из ответа ([api-contract.md](../system/api-contract.md), 3.1), а не по тексту. Для кодов, которых нет в таблице, показывается `title` из ответа, а если его нет — общий текст «Не удалось выполнить действие».
@@ -588,7 +596,7 @@
 | UI-07 Форма заявки | `request-form`, `request-form-address`, `request-form-speed`, `request-form-date`, `request-form-contact-name`, `request-form-contact-phone`, `request-form-contract`, `request-form-comment`, `request-form-submit`, `request-form-save`, `request-form-delete`, `request-form-delete-confirm`, `request-form-error`, `request-form-next-steps` |
 | UI-08 Карточка заявки | `request-card`, `request-card-number`, `request-card-status`, `request-card-title`, `request-card-facts`, `request-card-route`, `route-phase` (атрибут `data-state`), `system-check`, `request-card-history`, `history-entry`, `integration-error-banner`, `external-data`, `stage-sla`; блок «Сроки» — `request-card-sla`, `request-card-sla-timer-<ID таймера>` (атрибуты `data-kind` — вид срока, `data-stage` — тип этапа; значение — `request-card-sla-timer-<ID таймера>-value` с `data-state`; пример — `request-card-sla-timer-3f2a…` с `data-kind="MANAGER_ASSIGNMENT"`), `request-card-sla-pauses`, `sla-pause`, `request-card-sla-error` |
 | UI-08 Действия | `action-assign-manager`, `assign-manager-select`, `action-recheck-data`, `action-accept-offer`, `action-accept-offer-confirm`; коммерческие условия — `commercial-terms`, `terms-tariff-<STANDARD / INDIVIDUAL>`, `terms-discount`, `terms-contract`, `action-commercial-terms`; результат ТВ — `tech-result`, `tech-result-option-<AVAILABLE / WITH_CONSTRUCTION / NONE>`, `tech-capex`, `tech-days`, `tech-reason`, `tech-comment`, `action-tech-result`, `action-tech-result-confirm`, `tech-construction-unavailable` |
-| UI-08 Договор, исполнение, акт | `request-card-workflow-notice`; договор — `action-contract-sent`, `action-contract-concluded`, `contract-number`, `contract-date`, `action-contract-concluded-confirm`; инженер — `action-claim` (следующий этап из очереди), `action-complete` (монтаж выполнен, шаг 8), `action-activate`, `action-activate-confirm` (шаг 9); акт — `action-act-sent`, `action-act-signed`, `action-close-by-default` (шаг 10) |
+| UI-08 Договор, исполнение, акт | `request-card-workflow-notice`; договор — `action-contract-sent`, `action-contract-concluded`, `contract-number`, `contract-date`, `action-contract-concluded-confirm`; инженер — `action-claim` (следующий этап из очереди), `action-complete` (стройка или монтаж — по этапу в работе) (монтаж выполнен, шаг 8), `action-activate`, `action-activate-confirm` (шаг 9); акт — `action-act-sent`, `action-act-signed`, `action-close-by-default` (шаг 10) |
 | UI-08 Этапы маршрута | `route-phase` на строку этапа (атрибуты `data-state` — статус этапа, `data-stage` — тип этапа), `route-stage-assignee`, `route-stage-rules` (только оператору), `route-empty`, `route-more` |
 | UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
 | UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee` |
