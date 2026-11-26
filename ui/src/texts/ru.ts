@@ -370,6 +370,8 @@ export const texts = {
     claimStage: (stage: string) => `Взять этап «${stage}»`,
     claimed: 'Этап взят в работу',
     alreadyTaken: 'Этап уже взял другой сотрудник',
+    constructionDone: 'Стройка завершена',
+    constructionDoneToast: 'Стройка завершена. Следующий этап — монтаж и настройка',
     installationDone: 'Монтаж выполнен',
     installationDoneToast: 'Монтаж выполнен. Следующий этап — активация',
     activate: 'Услуга активирована',
@@ -428,9 +430,6 @@ export const texts = {
     noneConfirmTitle: 'Подключение невозможно?',
     noneConfirmText: 'Заявка будет отклонена, клиент и менеджер получат уведомление.',
     noneConfirm: 'Отклонить заявку',
-    constructionUnavailableTitle: 'Результат «Есть со стройкой» пока не принимается',
-    constructionUnavailable:
-      'Стройку и связанные с ней согласования система начнёт поддерживать на следующем этапе разработки. Пока выберите «Есть» или «Нет», а случай со стройкой обсудите с менеджером заявки.',
   },
 
   queue: {

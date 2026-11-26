@@ -283,29 +283,32 @@ describe('UI-08. Действия SC-01', () => {
 });
 
 describe('UI-08. Результат ТВ «со стройкой»', () => {
-  it('до недели 3 ядро отвечает 409 — форма показывает понятный текст', async () => {
+  it('отправляет CAPEX деньгами и срок стройки в днях (EC-04)', async () => {
     signIn('TECH_SPECIALIST');
     const taken = stage({ status: 'IN_PROGRESS', assigneeId: 'u-orlov', version: 1 });
-    mockApi({
+    const fetchMock = mockApi({
       'GET /me': () => jsonResponse(200, orlov),
       'GET /requests/r-131': () => jsonResponse(200, request({ status: 'TECH_CHECK', stages: [taken] })),
       'GET /requests/r-131/history': () => jsonResponse(200, page([])),
       'GET /requests/r-131/sla': () => jsonResponse(200, slaView),
-      'POST /stages/s-131/tech-result': () => jsonResponse(409, { code: 'ILLEGAL_TRANSITION', retryable: false }),
+      'POST /stages/s-131/tech-result': () => jsonResponse(200, { ...taken, status: 'DONE' }),
     });
     const user = userEvent.setup();
     renderApp('/requests/r-131');
 
     await user.click(await screen.findByTestId('tech-result-option-WITH_CONSTRUCTION'));
-    await user.type(screen.getByTestId('tech-capex'), '350000');
-    await user.type(screen.getByTestId('tech-days'), '20');
+    await user.type(screen.getByTestId('tech-capex'), '1 200 000');
+    await user.type(screen.getByTestId('tech-days'), '30');
     await user.click(screen.getByTestId('action-tech-result'));
 
-    expect(await screen.findByTestId('tech-construction-unavailable')).toHaveTextContent(
-      texts.techResult.constructionUnavailableTitle,
-    );
-    expect(screen.queryByText(texts.errors.ILLEGAL_TRANSITION!)).not.toBeInTheDocument();
-    expect(screen.queryByTestId('tech-return')).not.toBeInTheDocument();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/tech-result'))).toBe(true));
+    const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/tech-result'));
+    expect(bodyOf(call![1]!)).toEqual({
+      result: 'WITH_CONSTRUCTION',
+      capex: '1200000.00',
+      constructionDays: 30,
+      version: 1,
+    });
   });
 });
 
