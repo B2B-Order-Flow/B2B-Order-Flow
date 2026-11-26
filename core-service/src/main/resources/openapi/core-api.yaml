@@ -1440,13 +1440,24 @@ paths:
       summary: Отправить заявку повторно после доработки (T10)
       description: |
         Только менеджер заявки и только из статуса `REWORK`. Создаётся новая ревизия
-        (`reason = REWORK`), маршрут пересобирается: `routeVersion` растёт, принятые
-        решения согласующих сохраняются, если не изменились параметры их области
-        решения, иначе помечаются `superseded` и этап создаётся заново
-        (docs/system/routing-rules.md, 7). Если заявку возвращал технический специалист,
-        она возвращается на тот же этап `TECH_CHECK`; если согласований не осталось —
-        в `CONTRACT_SIGNING`, иначе в `IN_APPROVAL`. Автопауза `REWORK` снимается,
-        SLA возобновляется. Ответ — карточка заявки с новым статусом и маршрутом.
+        (`reason = REWORK`), данные заявки и выбранного предложения сохраняются.
+
+        Если заявку возвращал технический специалист (T09b), при возврате этап
+        `TECH_CHECK` перешёл в `RETURNED`, а его таймер встал на автопаузу `REWORK`.
+        Повторная отправка возобновляет **тот же** этап с тем же `stageId` и
+        продолжает **тот же** таймер с оставшегося времени. `routeVersion` при этом
+        не увеличивается: маршрут не пересобирается.
+
+        Если изменились параметры, влияющие на маршрут, маршрут пересобирается:
+        `routeVersion` увеличивается, принятые решения согласующих сохраняются, если
+        не изменились параметры их области решения, иначе помечаются `superseded`
+        и этап создаётся заново (docs/system/routing-rules.md, 7). `routeVersion`
+        увеличивается только при пересборке маршрута.
+
+        Дальнейший статус: если заявку возвращал технический специалист — на тот же
+        этап `TECH_CHECK`; если согласований не осталось — в `CONTRACT_SIGNING`,
+        иначе в `IN_APPROVAL`. Автопауза `REWORK` снимается, SLA возобновляется.
+        Ответ — карточка заявки с новым статусом и маршрутом.
       parameters:
         - $ref: '#/components/parameters/RequestId'
       requestBody:
@@ -2794,6 +2805,11 @@ components:
       enum: [STANDARD, EXTENDED, LARGE]
     StageView:
       type: object
+      description: |
+        Этап в карточке заявки, очередях и «Моих задачах». `requestNumber`,
+        `companyName`, `address` и `sla` заполняются для очередей и «Моих задач»;
+        сводка `sla` отдаётся только ролям оператора. Клиенту также не возвращаются
+        исполнители, `queueRole` и `requiredByRules`.
       required: [id, requestId, type, status, version, createdAt]
       properties:
         id:
@@ -3405,7 +3421,9 @@ components:
       description: |
         Этап плана маршрута. `stageId` и `status` пусты, пока этап не создан
         (например, управленческое согласование второй волны до завершения первой).
-      required: [type, wave, requiredByRules]
+        `requiredByRules` — служебное поле: оно заполняется для ролей оператора и
+        отсутствует в клиентском ответе, поэтому необязательно.
+      required: [type, wave]
       properties:
         stageId:
           type: string
@@ -3414,6 +3432,7 @@ components:
           $ref: '#/components/schemas/StageType'
         queueRole:
           $ref: '#/components/schemas/Role'
+          description: Не отдаётся клиенту
         status:
           $ref: '#/components/schemas/StageStatus'
         wave:
@@ -3423,7 +3442,9 @@ components:
           description: Волна согласований; 0 — этап вне волн согласований
         requiredByRules:
           type: array
-          description: ID правил маршрутизации, из-за которых появился этап
+          description: |
+            ID правил маршрутизации, из-за которых появился этап; не отдаётся клиенту
+            и в этом случае поле отсутствует.
           items:
             type: string
             example: R-01
@@ -3455,8 +3476,8 @@ components:
     StageSlaSummary:
       type: object
       description: |
-        Краткая сводка срока этапа для очередей и «Моих задач»; полный SLA с журналом
-        пауз — `GET /internal/v1/requests/{requestId}/sla`.
+        Краткая сводка срока этапа для очередей и «Моих задач»; отдаётся только ролям
+        оператора. Полный SLA с журналом пауз — `GET /internal/v1/requests/{requestId}/sla`.
       required: [status]
       properties:
         status:
@@ -3467,7 +3488,10 @@ components:
           description: Момент нарушения при условии, что пауз больше не будет
         remainingMinutes:
           type: integer
-          description: Остаток рабочего времени в минутах; отрицательный — просрочка
+          description: |
+            Остаток в минутах по календарю конкретного таймера: рабочие минуты для
+            этапов SLA, календарные минуты для стройки (`CONSTRUCTION`). Отрицательный
+            — просрочка.
         overdue:
           type: boolean
           description: Норматив уже исчерпан
