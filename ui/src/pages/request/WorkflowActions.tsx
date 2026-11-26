@@ -24,8 +24,8 @@ import { useRequestAction } from './useRequestAction';
 
 const t = texts.workflow;
 
-// Этапы, которые инженер ведёт из карточки на неделе 2. Стройка и устранение замечаний — неделя 3
-const ENGINEER_STAGES = new Set<StageType>(['INSTALLATION', 'ACTIVATION']);
+// Этапы исполнения, которые инженер ведёт из карточки (status-model.md §6.1.2). Устранение замечаний — с претензией клиента
+const ENGINEER_STAGES = new Set<StageType>(['CONSTRUCTION', 'INSTALLATION', 'ACTIVATION']);
 
 /** Менеджер этой заявки: договор и акт отмечает только он (core: requireOwnerManager). */
 function useIsRequestManager(request: RequestView): boolean {
@@ -193,7 +193,12 @@ function EngineerActions({ request }: { request: RequestView }) {
   const mine = request.stages?.find(
     (s) => s.status === 'IN_PROGRESS' && s.assigneeId === user?.id && ENGINEER_STAGES.has(s.type),
   );
-  if (mine?.type === 'INSTALLATION') return <CompleteInstallation request={request} stage={mine} />;
+  if (mine?.type === 'CONSTRUCTION') {
+    return <CompleteStage request={request} stage={mine} label={t.constructionDone} toast={t.constructionDoneToast} />;
+  }
+  if (mine?.type === 'INSTALLATION') {
+    return <CompleteStage request={request} stage={mine} label={t.installationDone} toast={t.installationDoneToast} />;
+  }
   if (mine?.type === 'ACTIVATION') return <ActivateService request={request} stage={mine} />;
 
   // После монтажа следующий этап лежит в очереди: взять его можно прямо из карточки
@@ -225,12 +230,19 @@ function ClaimStage({ request, stage }: { request: RequestView; stage: StageView
   );
 }
 
-function CompleteInstallation({ request, stage }: { request: RequestView; stage: StageView }) {
-  const complete = useRequestAction(
-    request.id,
-    () => stagesApi.complete(stage.id, stage.version),
-    t.installationDoneToast,
-  );
+/** Этап исполнения выполнен: после стройки ядро создаёт монтаж, после монтажа — активацию. */
+function CompleteStage({
+  request,
+  stage,
+  label,
+  toast,
+}: {
+  request: RequestView;
+  stage: StageView;
+  label: string;
+  toast: string;
+}) {
+  const complete = useRequestAction(request.id, () => stagesApi.complete(stage.id, stage.version), toast);
   return (
     <Button
       variant="contained"
@@ -238,7 +250,7 @@ function CompleteInstallation({ request, stage }: { request: RequestView; stage:
       onClick={() => complete.mutate(undefined)}
       data-testid="action-complete"
     >
-      {t.installationDone}
+      {label}
     </Button>
   );
 }

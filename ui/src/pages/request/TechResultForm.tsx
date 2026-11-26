@@ -7,10 +7,9 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Typography from '@mui/material/Typography';
 import { useState, type FormEvent } from 'react';
 import { stagesApi } from '../../api/endpoints';
-import { fieldErrors, isApiError } from '../../api/errors';
+import { fieldErrors } from '../../api/errors';
 import type { RequestView, StageView, TechResult, TechResultPayload } from '../../api/types';
 import { FieldRow, SelectField, TextField } from '../../components/ui/FormField';
-import { Notice } from '../../components/ui/Notice';
 import { OptionCards } from '../../components/ui/OptionCards';
 import { Panel, PanelTitle } from '../../components/ui/Panel';
 import { texts } from '../../texts/ru';
@@ -38,22 +37,12 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
   const [comment, setComment] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [confirmNone, setConfirmNone] = useState(false);
-  // «Есть со стройкой» ядро примет с недели 3 (T06): до тех пор — 409 ILLEGAL_TRANSITION
-  const [constructionUnavailable, setConstructionUnavailable] = useState(false);
 
   const save = useRequestAction(
     request.id,
     (payload: TechResultPayload) => stagesApi.techResult(stage.id, payload),
     t.saved,
-    {
-      onSuccess: () => setConfirmNone(false),
-      onError: (error, payload) => {
-        const blocked =
-          payload.result === 'WITH_CONSTRUCTION' && isApiError(error) && error.code === 'ILLEGAL_TRANSITION';
-        setConstructionUnavailable(blocked);
-        return blocked;
-      },
-    },
+    { onSuccess: () => setConfirmNone(false) },
   );
   const serverErrors = fieldErrors(save.error) as Errors;
 
@@ -99,7 +88,6 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
         onChange={(value) => {
           setResult(value);
           setErrors({});
-          setConstructionUnavailable(false);
         }}
         testId="tech-result-option"
         options={[
@@ -134,11 +122,6 @@ export function TechResultForm({ request, stage }: { request: RequestView; stage
             testId="tech-days"
           />
         </FieldRow>
-      ) : null}
-      {result === 'WITH_CONSTRUCTION' && constructionUnavailable ? (
-        <Notice tone="warning" title={t.constructionUnavailableTitle} testId="tech-construction-unavailable">
-          {t.constructionUnavailable}
-        </Notice>
       ) : null}
       {result === 'NONE' ? (
         <>

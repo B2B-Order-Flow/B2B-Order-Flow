@@ -283,6 +283,48 @@ describe('Монтаж и активация (шаги 8–9)', () => {
     expect(bodyOf(callTo(fetchMock, '/stages/s-2/claim')![1]!)).toEqual({ version: 0 });
   });
 
+  it('стройку можно взять из карточки, после неё появляется монтаж (цепочка 6.1.2)', async () => {
+    signIn('ENGINEER');
+    const queued = stage({ id: 's-build', type: 'CONSTRUCTION', status: 'QUEUED', assigneeId: undefined, version: 0 });
+    const building = { ...queued, status: 'IN_PROGRESS' as const, assigneeId: 'u-kim', version: 1 };
+    const installation = stage({
+      id: 's-install',
+      type: 'INSTALLATION',
+      status: 'QUEUED',
+      assigneeId: undefined,
+      version: 0,
+    });
+    let current = request({ status: 'IN_EXECUTION', techResult: 'WITH_CONSTRUCTION', stages: [queued] });
+    const fetchMock = engineerApi(request(), {
+      'GET /requests/r-1': () => jsonResponse(200, current),
+      'POST /stages/s-build/claim': () => {
+        current = { ...current, workStartedAt: '2026-11-26T09:00:00Z', commitmentLevel: 2, stages: [building] };
+        return jsonResponse(200, building);
+      },
+      'POST /stages/s-build/complete': () => {
+        current = { ...current, stages: [{ ...building, status: 'DONE', version: 2 }, installation] };
+        return jsonResponse(200, { ...building, status: 'DONE', version: 2 });
+      },
+    });
+    const user = userEvent.setup();
+    renderApp('/requests/r-1');
+
+    const claim = await screen.findByTestId('action-claim');
+    expect(claim).toHaveTextContent(t.claimStage(texts.stageType.CONSTRUCTION));
+    await user.click(claim);
+
+    const complete = await screen.findByTestId('action-complete');
+    expect(complete).toHaveTextContent(t.constructionDone);
+    await user.click(complete);
+
+    await waitFor(() => expect(callTo(fetchMock, '/stages/s-build/complete')).toBeTruthy());
+    expect(bodyOf(callTo(fetchMock, '/stages/s-build/complete')![1]!)).toEqual({ version: 1 });
+    expect(await screen.findByText(t.constructionDoneToast)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId('action-claim')).toHaveTextContent(t.claimStage(texts.stageType.INSTALLATION)),
+    );
+  });
+
   it('активация — только после подтверждения «Тест канала пройден?»', async () => {
     signIn('ENGINEER');
     const activation = stage({ id: 's-2', type: 'ACTIVATION', version: 1 });
