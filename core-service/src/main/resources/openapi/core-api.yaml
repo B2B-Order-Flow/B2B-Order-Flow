@@ -2193,7 +2193,7 @@ paths:
         - name: status
           in: query
           required: false
-          description: Статус заявки; список статусов передаётся повторением параметра
+          description: Статус заявки
           schema:
             $ref: '#/components/schemas/RequestStatus'
         - name: closedFrom
