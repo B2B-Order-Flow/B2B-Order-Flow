@@ -505,7 +505,7 @@
 
 **Кто:** юрист, финансовый контролёр, специалист по закупкам, руководитель B2B. **Операции:** `GET /stages?queueRole=…&status=QUEUED`, `POST /stages/{id}/claim`, `POST /stages/{id}/decision`, `GET /dictionaries/rejection-reasons?stageType=…`, `GET /requests/{id}/route`.
 
-**Очередь роли (UI-11).** У каждого согласующего — очередь своего вида согласования, у руководителя B2B — управленческого. Колонка «Срок этапа» берётся из сводки `StageView.sla`: «осталось …», «просрочено на …» (красным), «на паузе», «завершён». Сверху — просроченные и этапы с меньшим остатком, без сводки — дольше ждущие.
+**Очередь роли (UI-11).** У каждого согласующего — очередь своего вида согласования, у руководителя B2B — управленческого. Колонка «Срок этапа» берётся из сводки `StageView.sla`: «осталось …», «просрочено на …» (красным), «на паузе», «завершён». Порядок: сначала просроченные (даже если остаток не пришёл), затем идущие по остатку, затем на паузе и завершённые, без сводки — в конце; при равенстве выше дольше ждущий этап. У завершённого или приостановленного этапа с нарушенным нормативом текст «завершён с просрочкой» или «на паузе, срок нарушен».
 
 **Карточка заявки.**
 - Этап своей роли в очереди — кнопка «Взять этап "…"» в блоке действий.
@@ -606,7 +606,7 @@
 | UI-08 Договор, исполнение, акт | `request-card-workflow-notice`; договор — `action-contract-sent`, `action-contract-concluded`, `contract-number`, `contract-date`, `action-contract-concluded-confirm`; инженер — `action-claim` (следующий этап из очереди), `action-complete` (монтаж выполнен, шаг 8), `action-activate`, `action-activate-confirm` (шаг 9); акт — `action-act-sent`, `action-act-signed`, `action-close-by-default` (шаг 10) |
 | UI-08 Этапы маршрута | `route-phase` на строку этапа (атрибуты `data-state` — статус этапа, `data-stage` — тип этапа), `route-stage-assignee`, `route-stage-rules` (только оператору), `route-empty`, `route-more`; по плану маршрута — заголовки волн `route-wave-1`, `route-wave-2`, у строки атрибут `data-wave`, у ещё не созданного этапа `data-state="PLANNED"` |
 | UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
-| UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee`, `stage-sla-cell` (атрибут `data-state`: `RUNNING` / `PAUSED` / `BREACHED` / `STOPPED`) |
+| UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee`, `stage-sla-cell` (атрибут `data-state`: `RUNNING` / `PAUSED` / `BREACHED` / `STOPPED` — совпадает с текстом, «завершён» и «на паузе» важнее просрочки; `data-overdue="true"`, если норматив нарушен) |
 | UI-12 Мои задачи | `my-tasks-page`, `my-tasks-table`, `my-tasks-row-<номер>`, `action-open` |
 | UI-08 Согласование | `approval-decision`, `decision-option-<APPROVE / RETURN / REJECT>`, `decision-reason`, `decision-comment`, `action-decision`, `action-decision-confirm`, `approval-terms`, `approval-self`; взять этап — `action-claim` |
 | UI-14 Уведомления | колокольчик — `notifications-bell`, `notifications-badge`, `notifications-popover`, `notifications-menu-row-<id>`, `notifications-all`; экран — `notifications-page`, `notifications-row-<id>` (атрибут `data-state`: `unread` / `read`), `notifications-page-number`; `action-read`, `action-read-all` |
