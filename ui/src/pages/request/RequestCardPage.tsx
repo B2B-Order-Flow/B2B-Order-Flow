@@ -11,6 +11,7 @@ import { RequestHeader } from './RequestHeader';
 import { RequestOverview } from './RequestOverview';
 import { RequestSlaPanel } from './SlaPanel';
 import { TechResultForm } from './TechResultForm';
+import { ReworkLayout } from './ReworkForm';
 import { WorkflowNotice } from './WorkflowActions';
 
 const TECH_STAGES = new Set<StageView['type']>(['TECH_CHECK', 'RECHECK_TECH']);
@@ -35,12 +36,16 @@ export function RequestCardPage() {
       : undefined;
   const termsMode =
     activeRole === 'SALES_MANAGER' && request.status === 'WITH_MANAGER' && request.managerId === user?.id;
+  // Заявку вернули на доработку — её менеджер правит данные и отправляет повторно (T10)
+  const reworkMode = activeRole === 'SALES_MANAGER' && request.status === 'REWORK' && request.managerId === user?.id;
 
   return (
     <Page gap={22} top={28} testId="request-card">
       <RequestHeader request={request} />
       <WorkflowNotice request={request} />
-      {termsMode ? (
+      {reworkMode ? (
+        <ReworkLayout request={request} />
+      ) : termsMode ? (
         <TermsLayout request={request} />
       ) : techStage ? (
         <TechLayout request={request} stage={techStage} />

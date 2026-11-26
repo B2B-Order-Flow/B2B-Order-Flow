@@ -354,6 +354,46 @@ export const texts = {
   },
 
   // Действия SC-01 в карточке: договор, монтаж и активация, акт (ui-requirements.md §7.3)
+  // Доработка заявки (ui-requirements.md §9.3)
+  rework: {
+    title: 'Доработка заявки',
+    reasonTitle: 'Что исправить',
+    reasonUnknown: 'Комментарий к возврату не найден — посмотрите историю заявки',
+    speed: 'Скорость по условиям, Мбит/с',
+    save: 'Сохранить',
+    saved: 'Изменения сохранены',
+    resubmit: 'Отправить повторно',
+    resubmitted: 'Заявка отправлена повторно',
+    returnAction: 'Вернуть на доработку',
+    returnTitle: 'Вернуть заявку менеджеру?',
+    returnText:
+      'Заявка уйдёт менеджеру на доработку, срок этапа встанет на паузу. После повторной отправки проверка продолжится с того же места.',
+    whatToFix: 'Что исправить',
+    returnConfirm: 'Вернуть',
+    returned: 'Заявка возвращена на доработку',
+    revisionsTitle: 'Что изменилось',
+    revisionTitle: (no: number, reason: string) => `Ревизия ${no} · ${reason}`,
+    reasons: {
+      SUBMIT: 'отправка',
+      REWORK: 'после доработки',
+      RECALC: 'пересборка маршрута',
+      RECHECK: 'повторная проверка ТВ',
+    } as Record<string, string>,
+    fields: {
+      address: 'Адрес',
+      requestedSpeedMbps: 'Скорость в заявке',
+      speedMbps: 'Скорость по условиям',
+      desiredDate: 'Желаемая дата',
+      contactName: 'Контактное лицо',
+      contactPhone: 'Телефон',
+      contractPreference: 'Пожелание по договору',
+      clientComment: 'Комментарий клиента',
+      tariffType: 'Тариф',
+      discountPercent: 'Скидка',
+      contractType: 'Договор',
+    } as Record<string, string>,
+  },
+
   workflow: {
     contractSent: 'Договор отправлен',
     contractSentDone: 'Отмечено: договор отправлен клиенту',
