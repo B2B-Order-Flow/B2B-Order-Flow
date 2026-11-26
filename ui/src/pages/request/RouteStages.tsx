@@ -17,6 +17,7 @@ const t = texts.requestCard;
 
 const BEFORE_ROUTE: ReadonlySet<RequestStatus> = new Set(['DRAFT', 'DATA_CHECK', 'WITH_MANAGER']);
 const FINAL: ReadonlySet<RequestStatus> = new Set(['CLOSED', 'REJECTED', 'CANCELLED']);
+const STOPPED: ReadonlySet<RequestStatus> = new Set(['REJECTED', 'CANCELLED']);
 
 type RowState = StageStatus | 'PLANNED';
 
@@ -67,7 +68,10 @@ export function RouteStages({ request, client }: { request: RequestView; client:
     enabled: !BEFORE_ROUTE.has(request.status),
     retry: false,
   });
-  const plan = planQuery.data?.stages;
+  // Отклонённой или отменённой заявке несозданные этапы уже не предстоят: показываем только фактические
+  const plan = planQuery.data?.stages.filter(
+    (entry) => !STOPPED.has(request.status) || Boolean(entry.stageId || entry.status),
+  );
 
   const byId = new Map(stages.map((s) => [s.id, s]));
   const rows: Row[] = plan?.length
@@ -80,7 +84,7 @@ export function RouteStages({ request, client }: { request: RequestView; client:
           state,
           wave: entry.wave,
           assignee: client || !created ? null : assigneeText(created, user?.id),
-          rules: client ? [] : entry.requiredByRules,
+          rules: client ? [] : (entry.requiredByRules ?? []),
         };
       })
     : stages.map((s) => ({

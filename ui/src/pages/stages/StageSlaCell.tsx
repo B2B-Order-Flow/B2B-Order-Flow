@@ -1,6 +1,6 @@
 import Typography from '@mui/material/Typography';
 import type { StageView } from '../../api/types';
-import { formatDuration } from '../../lib/sla';
+import { formatDuration, isCalendarTimer } from '../../lib/sla';
 import { texts } from '../../texts/ru';
 import { c, type ColorToken } from '../../theme/tokens';
 
@@ -8,21 +8,23 @@ const t = texts.queue.sla;
 
 /**
  * Ячейка «Срок этапа» в очередях и «Моих задачах» по краткой сводке StageView.sla (решение Димы и
- * Кирилла недели 3). Остаток — в рабочем времени; полный срок с журналом пауз — в карточке заявки.
+ * Кирилла недели 3). Календарь — как в карточке: стройка в календарном времени (sla.md §4), остальные
+ * этапы в рабочем. Полный срок с журналом пауз — в карточке заявки.
  */
 export function StageSlaCell({ stage }: { stage: StageView }) {
   const sla = stage.sla;
   let text = '—';
   let color: ColorToken = 'text-muted';
+  const work = !isCalendarTimer({ kind: 'STAGE_SLA', stageType: stage.type });
   if (sla) {
     const minutes = sla.remainingMinutes;
     if (sla.status === 'STOPPED') text = t.stopped;
     else if (sla.status === 'PAUSED') text = t.paused;
     else if (sla.overdue || sla.status === 'BREACHED') {
-      text = minutes !== undefined && minutes < 0 ? t.overdueBy(formatDuration(-minutes)) : t.overdue;
+      text = minutes !== undefined && minutes < 0 ? t.overdueBy(formatDuration(-minutes, work)) : t.overdue;
       color = 'sla-breach-text';
     } else if (minutes !== undefined) {
-      text = t.left(formatDuration(minutes));
+      text = t.left(formatDuration(minutes, work));
       color = 'text-primary';
     }
   }

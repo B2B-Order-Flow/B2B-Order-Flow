@@ -280,7 +280,11 @@ describe('Волны согласований в маршруте', () => {
   });
 
   it('клиенту план без исполнителей и правил', async () => {
-    const clientPlan = { ...plan, stages: plan.stages.map((s) => ({ ...s, requiredByRules: [] })) };
+    // Как в ответе ядра клиенту: служебных полей нет совсем, а не пустые значения
+    const clientPlan: RouteView = {
+      ...plan,
+      stages: plan.stages.map(({ requiredByRules: _r, queueRole: _q, ...rest }) => rest),
+    };
     open('CLIENT_OWNER', { ...person('u-fedorova', []), companyRoles: ['CLIENT_OWNER'] }, request(created), {
       'GET /requests/r-1/route': () => jsonResponse(200, clientPlan),
     });
@@ -290,6 +294,45 @@ describe('Волны согласований в маршруте', () => {
     expect(within(route).queryByTestId('route-stage-assignee')).not.toBeInTheDocument();
     expect(within(route).queryByTestId('route-stage-rules')).not.toBeInTheDocument();
   });
+});
+
+describe('Маршрут завершившейся заявки', () => {
+  it.each(['REJECTED', 'CANCELLED'] as const)(
+    '%s: только фактические этапы и решения, без «Будет создан позже»',
+    async (status) => {
+      const plan: RouteView = {
+        requestId: 'r-1',
+        routeVersion: 2,
+        stages: [
+          { stageId: 's-tech', type: 'TECH_CHECK', status: 'DONE', wave: 0, requiredByRules: [] },
+          { stageId: 's-legal', type: 'LEGAL_APPROVAL', status: 'REJECTED', wave: 1, requiredByRules: ['R-01'] },
+          { stageId: 's-fin', type: 'FINANCE_APPROVAL', status: 'CANCELLED', wave: 1, requiredByRules: ['R-03'] },
+          { type: 'MGMT_APPROVAL', wave: 2, requiredByRules: ['R-07'] },
+          { type: 'CONTRACT_SIGNING', wave: 0, requiredByRules: [] },
+        ],
+      };
+      const created = [
+        stage({ id: 's-tech', type: 'TECH_CHECK', status: 'DONE', queueRole: 'TECH_SPECIALIST' }),
+        stage({ id: 's-legal', status: 'REJECTED' }),
+        stage({ id: 's-fin', type: 'FINANCE_APPROVAL', status: 'CANCELLED', queueRole: 'FINANCE_CONTROLLER' }),
+      ];
+      open('B2B_HEAD', person('u-gromov', ['B2B_HEAD']), request(created, { status }), {
+        'GET /requests/r-1/route': () => jsonResponse(200, plan),
+      });
+
+      const route = await screen.findByTestId('request-card-route');
+      await within(route).findByTestId('route-wave-1');
+      const rows = within(route).getAllByTestId('route-phase');
+      expect(rows.map((el) => `${el.getAttribute('data-stage')}:${el.getAttribute('data-state')}`)).toEqual([
+        'TECH_CHECK:DONE',
+        'LEGAL_APPROVAL:REJECTED',
+        'FINANCE_APPROVAL:CANCELLED',
+      ]);
+      expect(rows[1]).toHaveTextContent('Отклонено');
+      expect(within(route).queryByText(texts.requestCard.stagePlanned)).not.toBeInTheDocument();
+      expect(within(route).queryByTestId('route-wave-2')).not.toBeInTheDocument();
+    },
+  );
 });
 
 describe('Очереди согласующих', () => {
@@ -324,6 +367,54 @@ describe('Очереди согласующих', () => {
       'осталось 45 мин',
     );
     expect(within(screen.getByTestId('queue-row-REQ-D')).getByTestId('stage-sla-cell')).toHaveTextContent('на паузе');
+  });
+
+  it('срок стройки — в календарных днях, согласований — в рабочем времени', async () => {
+    sessionStore.setToken('jwt', 28800);
+    sessionStore.setActiveRole('COORDINATOR');
+    mockApi({
+      'GET /me': () => jsonResponse(200, person('u-kovaleva', ['COORDINATOR'])),
+      'GET /stages': (url) =>
+        jsonResponse(200, {
+          ...empty,
+          content:
+            url.searchParams.get('queueRole') === 'ENGINEER'
+              ? [
+                  stage({
+                    id: 's-build',
+                    requestNumber: 'REQ-BUILD',
+                    type: 'CONSTRUCTION',
+                    status: 'QUEUED',
+                    queueRole: 'ENGINEER',
+                    assigneeId: undefined,
+                    sla: { status: 'RUNNING', remainingMinutes: 1440 },
+                  }),
+                  stage({
+                    id: 's-late',
+                    requestNumber: 'REQ-LATE',
+                    type: 'CONSTRUCTION',
+                    status: 'QUEUED',
+                    queueRole: 'ENGINEER',
+                    assigneeId: undefined,
+                    sla: { status: 'BREACHED', remainingMinutes: -2880, overdue: true },
+                  }),
+                ]
+              : [queued('s-legal', 'REQ-LEGAL', { status: 'RUNNING', remainingMinutes: 1440 })],
+        }),
+    });
+    const user = userEvent.setup();
+    renderApp('/queue');
+
+    expect(within(await screen.findByTestId('queue-row-REQ-LEGAL')).getByTestId('stage-sla-cell')).toHaveTextContent(
+      'осталось 3 р.д.',
+    );
+    await user.selectOptions(screen.getByTestId('queue-role'), 'ENGINEER');
+    expect(within(await screen.findByTestId('queue-row-REQ-BUILD')).getByTestId('stage-sla-cell')).toHaveTextContent(
+      'осталось 1 д.',
+    );
+    expect(within(screen.getByTestId('queue-row-REQ-LATE')).getByTestId('stage-sla-cell')).toHaveTextContent(
+      'просрочено на 2 д.',
+    );
   });
 
   it('у руководителя B2B есть очередь управленческого согласования', () => {

@@ -488,7 +488,8 @@ export interface RouteStageView {
   status?: StageStatus;
   /** Волна согласований: 0 — вне волн, 1 — профильные, 2 — управленческое. */
   wave: number;
-  requiredByRules: string[];
+  /** Не отдаётся клиенту: в клиентском ответе поле отсутствует. */
+  requiredByRules?: string[];
 }
 
 export interface RouteView {
