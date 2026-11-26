@@ -20,6 +20,7 @@ import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
 import { c } from '../../theme/tokens';
 import { dateAt } from './labels';
+import { TechReturn } from './TechReturnAction';
 import { useRequestAction } from './useRequestAction';
 
 const t = texts.workflow;
@@ -55,6 +56,7 @@ export function WorkflowActions({ request }: { request: RequestView }) {
   if (manager && request.status === 'CONTRACT_SIGNING' && contractTypeOf(request) !== 'OFFER') {
     return <ContractActions request={request} />;
   }
+  if (activeRole === 'TECH_SPECIALIST' && request.status === 'TECH_CHECK') return <TechReturn request={request} />;
   if (manager && request.status === 'ACTIVATED') return <ActActions request={request} />;
   if (activeRole === 'ENGINEER' && request.status === 'IN_EXECUTION') {
     return <EngineerActions request={request} />;

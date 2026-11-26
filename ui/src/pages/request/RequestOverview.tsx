@@ -17,6 +17,7 @@ import { texts } from '../../texts/ru';
 import { c, radius } from '../../theme/tokens';
 import { RouteStages } from './RouteStages';
 import { actionLabel, actorLabel, dateAt, speedLabel } from './labels';
+import { RevisionsPanel } from './RevisionsPanel';
 import { RequestSlaPanel } from './SlaPanel';
 
 const t = texts.requestCard;
@@ -59,6 +60,7 @@ export function RequestOverview({ request }: { request: RequestView }) {
         <RoutePanel request={request} client={client} />
         <Stack sx={{ flex: 1, gap: '24px', minWidth: 0 }}>
           <HistoryPanel request={request} />
+          <RevisionsPanel request={request} />
           <Panel gap={14}>
             <PanelTitle>{t.params}</PanelTitle>
             <KeyValueGrid

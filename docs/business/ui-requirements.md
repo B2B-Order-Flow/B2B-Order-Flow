@@ -501,6 +501,15 @@
 | Пороги маршрутизации и нормативы SLA | `ADMIN` | Раздел 6.11 [api-contract.md](../system/api-contract.md) | 4, если успеваем |
 | Выбор варианта услуги | КЛ, МП | Раздел 6.3 [api-contract.md](../system/api-contract.md) | 4 (П2), после утверждения системной части |
 
+### 9.3. Доработка заявки (неделя 3)
+
+**Кто:** технический специалист, менеджер заявки; ревизии видят менеджер заявки, координатор и руководитель B2B. **Операции:** `POST /stages/{id}/return`, `PATCH /requests/{id}/data`, `POST /requests/{id}/resubmit`, `GET /requests/{id}/revisions`.
+
+- **Возврат с проверки ТВ (T09b).** Исполнитель этапа «Проверка ТВ» в блоке действий нажимает «Вернуть на доработку» и в окне пишет, что исправить (обязательно). Заявка переходит в «На доработке», срок этапа — на паузу.
+- **Доработка у менеджера.** Менеджер заявки в статусе «На доработке» видит плашку «Что исправить» (последний комментарий возврата из истории: от техспециалиста или согласующего) и форму: адрес, скорость по условиям, желаемая дата, контакт, тариф, скидка, тип договора. Проверки — как в форме клиента (§6.7) и в коммерческих условиях (§7.3).
+- «Сохранить» (`PATCH /data`) сохраняет и оставляет заявку на доработке. «Отправить повторно» сначала сохраняет несохранённые изменения, затем выполняет T10: заявка возвращается на тот же этап ТВ или на согласования, при изменении параметров маршрута ядро пересобирает маршрут.
+- **Что изменилось.** В обзоре карточки — блок с ревизиями после первой отправки: номер, причина (после доработки, пересборка маршрута, повторная проверка ТВ), дата и изменённые поля «было → стало». Другим ролям запрос не отправляется; если ревизий с изменениями нет, блока нет.
+
 ## 10. Тексты ошибок
 
 Интерфейс ветвится по `code` из ответа ([api-contract.md](../system/api-contract.md), 3.1), а не по тексту. Для кодов, которых нет в таблице, показывается `title` из ответа, а если его нет — общий текст «Не удалось выполнить действие».
@@ -593,6 +602,7 @@
 | UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
 | UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee` |
 | UI-12 Мои задачи | `my-tasks-page`, `my-tasks-table`, `my-tasks-row-<номер>`, `action-open` |
+| UI-08 Доработка | возврат ТВ — `action-tech-return`, `tech-return-comment`, `action-tech-return-confirm`; менеджер — `rework-reason`, `rework-form`, `rework-address`, `rework-speed`, `rework-date`, `rework-contact-name`, `rework-contact-phone`, `rework-tariff-<STANDARD / INDIVIDUAL>`, `rework-discount`, `rework-contract`, `action-save-data`, `action-resubmit`; ревизии — `request-card-revisions`, `revision-<номер>`, `revision-change` |
 | UI-14 Уведомления | колокольчик — `notifications-bell`, `notifications-badge`, `notifications-popover`, `notifications-menu-row-<id>`, `notifications-all`; экран — `notifications-page`, `notifications-row-<id>` (атрибут `data-state`: `unread` / `read`), `notifications-page-number`; `action-read`, `action-read-all` |
 
 ## 12. Принятые решения

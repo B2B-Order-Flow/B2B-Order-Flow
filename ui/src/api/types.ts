@@ -347,6 +347,42 @@ export interface CommercialTermsPayload {
   version: number;
 }
 
+/** Правка данных в доработке (T09, T09b, T12): переданные поля заменяются, остальные остаются. */
+export interface UpdateRequestDataPayload extends RequestPayload {
+  version: number;
+  tariffType?: TariffType;
+  /** Проценты строкой с двумя знаками; обязательна при INDIVIDUAL. */
+  discountPercent?: string;
+  /** Скорость в предложении услуги. */
+  speedMbps?: number;
+  contractType?: ContractType;
+}
+
+/** Возврат с проверки ТВ (T09b): что исправить. */
+export interface StageReturnPayload {
+  comment: string;
+  version: number;
+}
+
+export type RevisionReason = 'SUBMIT' | 'REWORK' | 'RECALC' | 'RECHECK';
+
+/** Одно изменившееся поле между соседними ревизиями. */
+export interface RevisionChange {
+  field: string;
+  previousValue?: string;
+  newValue?: string;
+}
+
+export interface RequestRevisionView {
+  id: string;
+  revisionNo: number;
+  reason: RevisionReason;
+  createdBy?: string;
+  createdAt: string;
+  params?: Record<string, unknown>;
+  changes: RevisionChange[];
+}
+
 export interface ContractConcludedPayload {
   contractNumber: string;
   /** Дата подписания YYYY-MM-DD, не позже сегодняшней. */

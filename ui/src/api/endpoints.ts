@@ -17,6 +17,9 @@ import type {
   RegisterUserRequest,
   RequestListQuery,
   RequestPayload,
+  RequestRevisionView,
+  StageReturnPayload,
+  UpdateRequestDataPayload,
   RequestView,
   SlaView,
   Role,
@@ -80,6 +83,13 @@ export const requestsApi = {
     api.post<RequestView>(`/requests/${requestId}/act/signed`, { body: { version } }),
   closeByDefault: (requestId: string, version: number) =>
     api.post<RequestView>(`/requests/${requestId}/close-by-default`, { body: { version } }),
+  // Доработка — неделя 3 (api-contract.md §6.2): правка данных, повторная отправка (T10), ревизии
+  updateData: (requestId: string, body: UpdateRequestDataPayload) =>
+    api.patch<RequestView>(`/requests/${requestId}/data`, { body }),
+  resubmit: (requestId: string, version: number) =>
+    api.post<RequestView>(`/requests/${requestId}/resubmit`, { body: { version } }),
+  revisions: (requestId: string, query: PageQuery = {}) =>
+    api.get<Page<RequestRevisionView>>(`/requests/${requestId}/revisions`, { query: { ...query } }),
   /** Таймеры этапов и контрольные сроки (оператору; клиенту SLA не отдаётся). */
   sla: (requestId: string) => api.get<SlaView>(`/requests/${requestId}/sla`),
 };
@@ -97,6 +107,9 @@ export const stagesApi = {
     api.post<StageView>(`/stages/${stageId}/complete`, { body: { version } }),
   activate: (stageId: string, version: number) =>
     api.post<StageView>(`/stages/${stageId}/activate`, { body: { version } }),
+  /** T09b: вернуть заявку менеджеру с проверки ТВ. */
+  returnToRework: (stageId: string, body: StageReturnPayload) =>
+    api.post<StageView>(`/stages/${stageId}/return`, { body }),
 };
 
 // Сотрудники оператора с ролью — для назначения менеджера и исполнителя (api-contract.md §6.1).
@@ -124,6 +137,7 @@ export const queryKeys = {
   stagesMy: ['stages', 'my'] as const,
   stagesAll: ['stages'] as const,
   sla: (requestId: string) => ['request', requestId, 'sla'] as const,
+  revisions: (requestId: string) => ['request', requestId, 'revisions'] as const,
   usersByRole: (role: string) => ['users', role] as const,
   notificationsAll: ['notifications'] as const,
   notifications: (query: object) => ['notifications', query] as const,
