@@ -158,6 +158,7 @@ describe('Доработка у менеджера', () => {
       contactPhone: '+7 (900) 000-00-01',
       speedMbps: 500,
       tariffType: 'STANDARD',
+      discountPercent: null,
       contractType: 'CLIENT_FORM',
       version: 8,
     });
@@ -180,6 +181,52 @@ describe('Доработка у менеджера', () => {
     expect(bodyOf(calls(fetchMock, 'PATCH', '/data')[0]![1]!)).toMatchObject({ speedMbps: 300, version: 8 });
     expect(bodyOf(calls(fetchMock, 'POST', '/resubmit')[0]![1]!)).toEqual({ version: 9 });
     expect(await screen.findByText(t.resubmitted)).toBeInTheDocument();
+  });
+
+  it('если resubmit упал после сохранения, повтор отправляет только resubmit с новой версией', async () => {
+    let resubmitFails = true;
+    const fetchMock = open('SALES_MANAGER', manager, request(), {
+      'PATCH /requests/r-1/data': (_, init) =>
+        jsonResponse(200, request({ version: bodyOf(init).version + 1, requestedSpeedMbps: 300 })),
+      'POST /requests/r-1/resubmit': (_, init) =>
+        resubmitFails
+          ? jsonResponse(503, { code: 'SERVICE_UNAVAILABLE', retryable: true })
+          : jsonResponse(200, request({ status: 'TECH_CHECK', version: bodyOf(init).version + 1 })),
+    });
+    const user = userEvent.setup();
+
+    const speed = await screen.findByTestId('rework-speed');
+    await user.clear(speed);
+    await user.type(speed, '300');
+    await user.click(screen.getByTestId('action-resubmit'));
+    await waitFor(() => expect(calls(fetchMock, 'POST', '/resubmit')).toHaveLength(1));
+    expect(calls(fetchMock, 'PATCH', '/data')).toHaveLength(1);
+    await waitFor(() => expect(screen.getByTestId('action-save-data')).toBeDisabled());
+    expect(screen.getByTestId('rework-speed')).toHaveValue('300');
+
+    resubmitFails = false;
+    await user.click(screen.getByTestId('action-resubmit'));
+    await waitFor(() => expect(calls(fetchMock, 'POST', '/resubmit')).toHaveLength(2));
+    expect(calls(fetchMock, 'PATCH', '/data')).toHaveLength(1);
+    expect(bodyOf(calls(fetchMock, 'POST', '/resubmit')[1]![1]!)).toEqual({ version: 9 });
+  });
+
+  it('очищенное заполненное поле уходит как null, нетронутые пустые не передаются', async () => {
+    const fetchMock = open('SALES_MANAGER', manager, request({ contactName: undefined }), {
+      'PATCH /requests/r-1/data': (_, init) => jsonResponse(200, request({ version: bodyOf(init).version + 1 })),
+    });
+    const user = userEvent.setup();
+
+    await user.clear(await screen.findByTestId('rework-contact-phone'));
+    await user.clear(screen.getByTestId('rework-date'));
+    await user.click(screen.getByTestId('action-save-data'));
+
+    await waitFor(() => expect(calls(fetchMock, 'PATCH', '/data')).toHaveLength(1));
+    const body = bodyOf(calls(fetchMock, 'PATCH', '/data')[0]![1]!);
+    expect(body.contactPhone).toBeNull();
+    expect(body.desiredDate).toBeNull();
+    expect('contactName' in body).toBe(false);
+    expect(body.discountPercent).toBe('15.00');
   });
 
   it('без изменений «Отправить повторно» не сохраняет, а сразу отправляет', async () => {

@@ -347,12 +347,18 @@ export interface CommercialTermsPayload {
   version: number;
 }
 
-/** Правка данных в доработке (T09, T09b, T12): переданные поля заменяются, остальные остаются. */
-export interface UpdateRequestDataPayload extends RequestPayload {
+/**
+ * Правка данных в доработке (T09, T09b, T12): переданные поля заменяются, непереданные остаются прежними.
+ * null — явная очистка поля (JSON Merge Patch, RFC 7396; предложение для контракта ядра).
+ */
+export interface UpdateRequestDataPayload extends Omit<RequestPayload, 'desiredDate' | 'contactName' | 'contactPhone'> {
   version: number;
+  desiredDate?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
   tariffType?: TariffType;
-  /** Проценты строкой с двумя знаками; обязательна при INDIVIDUAL. */
-  discountPercent?: string;
+  /** Проценты строкой с двумя знаками; обязательна при INDIVIDUAL, null снимает скидку. */
+  discountPercent?: string | null;
   /** Скорость в предложении услуги. */
   speedMbps?: number;
   contractType?: ContractType;

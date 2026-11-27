@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { queryKeys, requestsApi } from '../../api/endpoints';
 import { fieldErrors } from '../../api/errors';
@@ -50,8 +50,18 @@ function initialForm(request: RequestView): Form {
   };
 }
 
+/**
+ * Необязательное поле для PATCH: заполнено — значение; очищено, а раньше было заполнено, — null
+ * (явная очистка по правилу JSON Merge Patch, RFC 7396); пусто и было пусто — поле не передаётся,
+ * по контракту оно сохраняет прежнее значение.
+ */
+function optionalValue(value: string, before: string): string | null | undefined {
+  if (value.trim()) return value.trim();
+  return before.trim() ? null : undefined;
+}
+
 /** Проверки как в форме клиента (ui-requirements.md §6.7) и в коммерческих условиях (§7.3). */
-function validate(form: Form): { errors: Errors; payload?: Omit<UpdateRequestDataPayload, 'version'> } {
+function validate(form: Form, saved: Form): { errors: Errors; payload?: Omit<UpdateRequestDataPayload, 'version'> } {
   const errors: Errors = {};
   if (!form.address.trim()) errors.address = texts.common.required;
   else if (form.address.trim().length > 500) errors.address = f.errors.tooLong(500);
@@ -72,12 +82,13 @@ function validate(form: Form): { errors: Errors; payload?: Omit<UpdateRequestDat
     errors,
     payload: {
       address: form.address.trim(),
-      desiredDate: form.desiredDate || undefined,
-      contactName: form.contactName.trim() || undefined,
-      contactPhone: form.contactPhone.trim() || undefined,
+      desiredDate: optionalValue(form.desiredDate, saved.desiredDate),
+      contactName: optionalValue(form.contactName, saved.contactName),
+      contactPhone: optionalValue(form.contactPhone, saved.contactPhone),
       speedMbps: Number(speed),
       tariffType: form.tariffType,
-      discountPercent: form.tariffType === 'INDIVIDUAL' ? discountPercent : undefined,
+      // Переход на типовой тариф снимает прежнюю скидку явно, иначе она осталась бы и держала финансовое согласование (R-03)
+      discountPercent: form.tariffType === 'INDIVIDUAL' ? discountPercent : saved.discount.trim() ? null : undefined,
       contractType: form.contractType,
     },
   };
@@ -122,6 +133,7 @@ function ReworkForm({ request }: { request: RequestView }) {
   const [form, setForm] = useState<Form>(() => initialForm(request));
   const [saved, setSaved] = useState<Form>(() => initialForm(request));
   const [errors, setErrors] = useState<Errors>({});
+  const queryClient = useQueryClient();
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
   const set =
     <K extends keyof Form>(key: K) =>
@@ -135,13 +147,19 @@ function ReworkForm({ request }: { request: RequestView }) {
     t.saved,
     { onSuccess: () => setSaved(form) },
   );
-  // Повторная отправка сначала сохраняет несохранённые изменения, затем отправляет (как форма клиента, §6.7)
+  // Повторная отправка сначала сохраняет несохранённые изменения, затем отправляет (как форма клиента, §6.7).
+  // Успешное сохранение фиксируется сразу: если resubmit упадёт, повторный клик не сохранит ещё раз
+  // со старой версией (409), а только отправит заявку с новой версией.
   const resubmit = useRequestAction(
     request.id,
-    async (payload: Omit<UpdateRequestDataPayload, 'version'> | null) => {
-      const version = payload
-        ? (await requestsApi.updateData(request.id, { ...payload, version: request.version })).version
-        : request.version;
+    async ({ payload, snapshot }: { payload: Omit<UpdateRequestDataPayload, 'version'> | null; snapshot: Form }) => {
+      let version = request.version;
+      if (payload) {
+        const updated = await requestsApi.updateData(request.id, { ...payload, version });
+        queryClient.setQueryData(queryKeys.request(request.id), updated);
+        setSaved(snapshot);
+        version = updated.version;
+      }
       return requestsApi.resubmit(request.id, version);
     },
     t.resubmitted,
@@ -149,7 +167,7 @@ function ReworkForm({ request }: { request: RequestView }) {
   const serverErrors = fieldErrors(save.error ?? resubmit.error) as Errors & Record<string, string>;
 
   const checked = () => {
-    const result = validate(form);
+    const result = validate(form, saved);
     setErrors(result.errors);
     return result.payload;
   };
@@ -160,7 +178,7 @@ function ReworkForm({ request }: { request: RequestView }) {
   };
   const onResubmit = () => {
     const payload = checked();
-    if (payload) resubmit.mutate(dirty ? payload : null);
+    if (payload) resubmit.mutate({ payload: dirty ? payload : null, snapshot: form });
   };
   const busy = save.isPending || resubmit.isPending;
 
