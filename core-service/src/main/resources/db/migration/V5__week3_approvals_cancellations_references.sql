@@ -19,7 +19,8 @@ create table approval_decision (
     constraint ck_approval_decision_comment
         check (decision = 'APPROVE' or comment is not null and char_length(comment) between 1 and 4000),
     constraint ck_approval_decision_reject_reason
-        check (decision = 'REJECT' or reject_reason_code is null),
+        check ((decision = 'REJECT' and reject_reason_code is not null)
+            or (decision <> 'REJECT' and reject_reason_code is null)),
     constraint ck_approval_decision_scope_hash
         check (char_length(scope_hash) > 0)
 );
@@ -40,7 +41,7 @@ create table cancellation_request (
     reason_comment      text,
     previous_status     text,
     cost_amount         numeric(14, 2),
-    cost_breakdown      jsonb not null default '{}',
+    cost_breakdown      jsonb not null default '[]',
     cost_fixed_by       uuid references app_user (id) on delete restrict,
     cost_confirmed_by   uuid references app_user (id) on delete restrict,
     approved_by         uuid references app_user (id) on delete restrict,
@@ -54,7 +55,7 @@ create table cancellation_request (
     constraint ck_cancellation_request_method
         check (method in ('UNILATERAL', 'AGREEMENT')),
     constraint ck_cancellation_request_level
-        check (level_at_request between 0 and 3),
+        check (level_at_request between 0 and 2),
     constraint ck_cancellation_request_status
         check (status in ('OPEN', 'ACCEPTED', 'WITHDRAWN', 'REJECTED', 'EXPIRED')),
     constraint ck_cancellation_request_reason_comment
