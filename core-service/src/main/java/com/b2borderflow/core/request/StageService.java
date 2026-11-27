@@ -400,9 +400,13 @@ public class StageService {
             throw ApiException.validation("Укажите причину отказа",
                     List.of(new Violation("reasonCode", "REQUIRED", "Причина обязательна")));
         }
-        rejectionReasonRepository.findByCodeAndActiveTrue(reasonCode)
+        RejectionReason rejectionReason = rejectionReasonRepository.findByCodeAndActiveTrue(reasonCode)
                 .orElseThrow(() -> ApiException.validation("Неизвестная причина отказа",
                         List.of(new Violation("reasonCode", "INVALID", "Код отсутствует в справочнике"))));
+        if (!"OTHER".equals(reasonCode) && !"TECH_CHECK".equals(rejectionReason.getStageType())) {
+            throw ApiException.validation("Причина не соответствует шагу",
+                    List.of(new Violation("reasonCode", "INVALID", "Код не относится к технической проверке")));
+        }
         if ("OTHER".equals(reasonCode)
                 && (payload.getComment() == null || payload.getComment().isBlank())) {
             throw ApiException.validation("Для причины OTHER нужен комментарий",
