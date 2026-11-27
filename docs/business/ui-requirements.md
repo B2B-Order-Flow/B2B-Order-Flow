@@ -56,7 +56,7 @@
 | `SALES_MANAGER` | Мои заявки, Очередь менеджеров | UI-05 «Заявки» (свои) |
 | `TECH_SPECIALIST`, `ENGINEER` | Мои задачи, Очередь роли, Заявки | UI-12 «Мои задачи» |
 | `LAWYER`, `FINANCE_CONTROLLER`, `PROCUREMENT_SPECIALIST` | Мои задачи, Очередь роли, Заявки | UI-12 «Мои задачи» (неделя 3) |
-| `B2B_HEAD` | Заявки, Мои задачи | UI-05 «Заявки» (все) |
+| `B2B_HEAD` | Заявки, Мои задачи, Очередь роли (неделя 3) | UI-05 «Заявки» (все) |
 | `COORDINATOR` | Заявки, Очередь менеджеров, Очереди этапов | UI-05 «Заявки» (все) |
 | `ADMIN` | Подтверждение компаний | UI-06 «Подтверждение компаний» |
 
@@ -501,6 +501,21 @@
 | Пороги маршрутизации и нормативы SLA | `ADMIN` | Раздел 6.11 [api-contract.md](../system/api-contract.md) | 4, если успеваем |
 | Выбор варианта услуги | КЛ, МП | Раздел 6.3 [api-contract.md](../system/api-contract.md) | 4 (П2), после утверждения системной части |
 
+### 9.1. Согласования (неделя 3)
+
+**Кто:** юрист, финансовый контролёр, специалист по закупкам, руководитель B2B. **Операции:** `GET /stages?queueRole=…&status=QUEUED`, `POST /stages/{id}/claim`, `POST /stages/{id}/decision`, `GET /dictionaries/rejection-reasons?stageType=…`, `GET /requests/{id}/route`.
+
+**Очередь роли (UI-11).** У каждого согласующего — очередь своего вида согласования, у руководителя B2B — управленческого. Колонка «Срок этапа» берётся из сводки `StageView.sla`: «осталось …», «просрочено на …» (красным), «на паузе», «завершён». Порядок: сначала просроченные (даже если остаток не пришёл), затем идущие по остатку, затем на паузе и завершённые, без сводки — в конце; при равенстве выше дольше ждущий этап. У завершённого или приостановленного этапа с нарушенным нормативом текст «завершён с просрочкой» или «на паузе, срок нарушен».
+
+**Карточка заявки.**
+- Этап своей роли в очереди — кнопка «Взять этап "…"» в блоке действий.
+- Этап в работе у пользователя — раскладка согласования: слева форма решения, справа «Что согласуем» (скорость, тариф, скидка, договор, сегмент, задолженность, госзаказчик, CAPEX и срок стройки, правила маршрутизации этапа), ниже — обзор заявки с маршрутом и историей.
+- Форма: «Согласовать», «Вернуть на доработку» (обязательно «Что исправить»), «Отклонить» (обязательны причина и комментарий). Отклонение — с окном подтверждения: заявка отклоняется целиком, остальные согласования отменяются (EC-05).
+- Причины отклонения — справочник своего шага; `OTHER` добавляется всегда, при сбое справочника остаётся только он ([business-process.md](business-process.md), 10.2). Тот же справочник использует форма результата ТВ (шаг `TECH_CHECK`, для повторной ТВ — тоже он).
+- Менеджер заявки с ролью согласующего видит пояснение вместо формы и кнопки (EC-18); ответ ядра `403 SELF_APPROVAL_FORBIDDEN` показывается тем же текстом.
+
+**Маршрут в карточке.** Если ядро отдаёт `GET /requests/{id}/route`, этапы показываются по плану: профильные согласования — группой «волна 1», управленческое — «волна 2», ещё не созданные этапы — «Будет создан позже». У решённых согласований вместо статуса — решение: «Согласовано», «Возвращено на доработку», «Отклонено». Комментарии решений — в истории заявки. Если плана нет, показываются созданные этапы из `RequestView.stages`, как на неделе 2.
+
 ## 10. Тексты ошибок
 
 Интерфейс ветвится по `code` из ответа ([api-contract.md](../system/api-contract.md), 3.1), а не по тексту. Для кодов, которых нет в таблице, показывается `title` из ответа, а если его нет — общий текст «Не удалось выполнить действие».
@@ -589,10 +604,11 @@
 | UI-08 Карточка заявки | `request-card`, `request-card-number`, `request-card-status`, `request-card-title`, `request-card-facts`, `request-card-route`, `route-phase` (атрибут `data-state`), `system-check`, `request-card-history`, `history-entry`, `integration-error-banner`, `external-data`, `stage-sla`; блок «Сроки» — `request-card-sla`, `request-card-sla-timer-<ID таймера>` (атрибуты `data-kind` — вид срока, `data-stage` — тип этапа; значение — `request-card-sla-timer-<ID таймера>-value` с `data-state`; пример — `request-card-sla-timer-3f2a…` с `data-kind="MANAGER_ASSIGNMENT"`), `request-card-sla-pauses`, `sla-pause`, `request-card-sla-error` |
 | UI-08 Действия | `action-assign-manager`, `assign-manager-select`, `action-recheck-data`, `action-accept-offer`, `action-accept-offer-confirm`; коммерческие условия — `commercial-terms`, `terms-tariff-<STANDARD / INDIVIDUAL>`, `terms-discount`, `terms-contract`, `action-commercial-terms`; результат ТВ — `tech-result`, `tech-result-option-<AVAILABLE / WITH_CONSTRUCTION / NONE>`, `tech-capex`, `tech-days`, `tech-reason`, `tech-comment`, `action-tech-result`, `action-tech-result-confirm`, `tech-construction-unavailable` |
 | UI-08 Договор, исполнение, акт | `request-card-workflow-notice`; договор — `action-contract-sent`, `action-contract-concluded`, `contract-number`, `contract-date`, `action-contract-concluded-confirm`; инженер — `action-claim` (следующий этап из очереди), `action-complete` (монтаж выполнен, шаг 8), `action-activate`, `action-activate-confirm` (шаг 9); акт — `action-act-sent`, `action-act-signed`, `action-close-by-default` (шаг 10) |
-| UI-08 Этапы маршрута | `route-phase` на строку этапа (атрибуты `data-state` — статус этапа, `data-stage` — тип этапа), `route-stage-assignee`, `route-stage-rules` (только оператору), `route-empty`, `route-more` |
+| UI-08 Этапы маршрута | `route-phase` на строку этапа (атрибуты `data-state` — статус этапа, `data-stage` — тип этапа), `route-stage-assignee`, `route-stage-rules` (только оператору), `route-empty`, `route-more`; по плану маршрута — заголовки волн `route-wave-1`, `route-wave-2`, у строки атрибут `data-wave`, у ещё не созданного этапа `data-state="PLANNED"` |
 | UI-09 Очередь менеджеров | `manager-queue`, `manager-queue-row-<номер>`, `action-claim`, `action-assign-manager`, `action-recheck-data` |
-| UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee` |
+| UI-11 Очередь роли | `queue-page`, `queue-role` (координатор), `queue-table`, `queue-row-<номер>`, `action-claim`, `action-assign`, `stage-assignee`, `stage-sla-cell` (атрибут `data-state`: `RUNNING` / `PAUSED` / `BREACHED` / `STOPPED` — совпадает с текстом, «завершён» и «на паузе» важнее просрочки; `data-overdue="true"`, если норматив нарушен) |
 | UI-12 Мои задачи | `my-tasks-page`, `my-tasks-table`, `my-tasks-row-<номер>`, `action-open` |
+| UI-08 Согласование | `approval-decision`, `decision-option-<APPROVE / RETURN / REJECT>`, `decision-reason`, `decision-comment`, `action-decision`, `action-decision-confirm`, `approval-terms`, `approval-self`; взять этап — `action-claim` |
 | UI-14 Уведомления | колокольчик — `notifications-bell`, `notifications-badge`, `notifications-popover`, `notifications-menu-row-<id>`, `notifications-all`; экран — `notifications-page`, `notifications-row-<id>` (атрибут `data-state`: `unread` / `read`), `notifications-page-number`; `action-read`, `action-read-all` |
 
 ## 12. Принятые решения

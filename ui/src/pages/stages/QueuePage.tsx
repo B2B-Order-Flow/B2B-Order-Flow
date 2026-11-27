@@ -21,7 +21,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/states';
 import { formatShortDateTime } from '../../lib/format';
 import { useSession } from '../../session/SessionProvider';
 import { texts } from '../../texts/ru';
-import { byQueuedAt, StageSlaCell } from './StageSlaCell';
+import { byUrgency, StageSlaCell } from './StageSlaCell';
 
 const t = texts.queue;
 
@@ -76,7 +76,7 @@ export function QueuePage() {
     },
   });
 
-  const rows = [...(query.data?.content ?? [])].sort(byQueuedAt);
+  const rows = [...(query.data?.content ?? [])].sort(byUrgency);
 
   const columns: Column<StageView>[] = [
     {
@@ -101,7 +101,7 @@ export function QueuePage() {
       width: 130,
       render: (s) => <Cell>{formatShortDateTime(s.createdAt)}</Cell>,
     },
-    { key: 'sla', title: t.columns.sla, width: 300, render: () => <StageSlaCell /> },
+    { key: 'sla', title: t.columns.sla, width: 300, render: (s) => <StageSlaCell stage={s} /> },
     {
       key: 'action',
       title: '',

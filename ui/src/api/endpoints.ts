@@ -7,6 +7,7 @@ import type {
   CompanyStatus,
   CompanyView,
   ContractConcludedPayload,
+  DictionaryView,
   LoginRequest,
   LoginResponse,
   NotificationQuery,
@@ -18,9 +19,12 @@ import type {
   RequestListQuery,
   RequestPayload,
   RequestView,
+  RouteView,
   SlaView,
+  StageDecisionPayload,
   Role,
   StageQueueQuery,
+  StageType,
   StageView,
   TechResultPayload,
   UserView,
@@ -82,10 +86,13 @@ export const requestsApi = {
     api.post<RequestView>(`/requests/${requestId}/close-by-default`, { body: { version } }),
   /** Таймеры этапов и контрольные сроки (оператору; клиенту SLA не отдаётся). */
   sla: (requestId: string) => api.get<SlaView>(`/requests/${requestId}/sla`),
+  /** План маршрута с волнами и ещё не созданными этапами (неделя 3). */
+  route: (requestId: string) => api.get<RouteView>(`/requests/${requestId}/route`),
 };
 
 // Этапы — неделя 2 (api-contract.md §6.4, 6.13).
 export const stagesApi = {
+  decide: (stageId: string, body: StageDecisionPayload) => api.post<StageView>(`/stages/${stageId}/decision`, { body }),
   queue: (query: StageQueueQuery) => api.get<Page<StageView>>('/stages', { query: { ...query } }),
   my: () => api.get<Page<StageView>>('/stages/my'),
   claim: (stageId: string, version: number) => api.post<StageView>(`/stages/${stageId}/claim`, { body: { version } }),
@@ -97,6 +104,12 @@ export const stagesApi = {
     api.post<StageView>(`/stages/${stageId}/complete`, { body: { version } }),
   activate: (stageId: string, version: number) =>
     api.post<StageView>(`/stages/${stageId}/activate`, { body: { version } }),
+};
+
+// Справочники (api-contract.md §6.11): причины отклонения сужаются по шагу.
+export const dictionariesApi = {
+  rejectionReasons: (stageType: StageType) =>
+    api.get<DictionaryView>('/dictionaries/rejection-reasons', { query: { stageType } }),
 };
 
 // Сотрудники оператора с ролью — для назначения менеджера и исполнителя (api-contract.md §6.1).
@@ -125,6 +138,8 @@ export const queryKeys = {
   stagesAll: ['stages'] as const,
   sla: (requestId: string) => ['request', requestId, 'sla'] as const,
   usersByRole: (role: string) => ['users', role] as const,
+  route: (requestId: string) => ['request', requestId, 'route'] as const,
+  rejectionReasons: (stageType: string) => ['dictionaries', 'rejection-reasons', stageType] as const,
   notificationsAll: ['notifications'] as const,
   notifications: (query: object) => ['notifications', query] as const,
 };

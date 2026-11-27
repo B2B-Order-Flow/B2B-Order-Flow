@@ -5,6 +5,8 @@ import type { RequestView, StageView } from '../../api/types';
 import { ErrorState, LoadingState } from '../../components/states';
 import { Columns, Page } from '../../components/ui/Panel';
 import { useSession } from '../../session/SessionProvider';
+import { approvalStageFor } from '../../lib/approvals';
+import { ApprovalDecisionForm, ApprovalTermsPanel } from './ApprovalDecisionForm';
 import { ClientRequestPanel, ExternalDataPanel, StageSlaPanel, AddressPanel } from './InfoPanels';
 import { CommercialTermsForm } from './CommercialTermsForm';
 import { RequestHeader } from './RequestHeader';
@@ -33,6 +35,8 @@ export function RequestCardPage() {
     activeRole === 'TECH_SPECIALIST' && request.status === 'TECH_CHECK'
       ? request.stages?.find((s) => TECH_STAGES.has(s.type) && s.status === 'IN_PROGRESS' && s.assigneeId === user?.id)
       : undefined;
+  // Согласующий с этапом в работе решает прямо в карточке (неделя 3, ui-requirements.md §9.1)
+  const approvalStage = techStage ? undefined : approvalStageFor(request, activeRole, user?.id, 'IN_PROGRESS');
   const termsMode =
     activeRole === 'SALES_MANAGER' && request.status === 'WITH_MANAGER' && request.managerId === user?.id;
 
@@ -44,6 +48,8 @@ export function RequestCardPage() {
         <TermsLayout request={request} />
       ) : techStage ? (
         <TechLayout request={request} stage={techStage} />
+      ) : approvalStage ? (
+        <ApprovalLayout request={request} stage={approvalStage} />
       ) : (
         <RequestOverview request={request} />
       )}
@@ -75,5 +81,17 @@ function TechLayout({ request, stage }: { request: RequestView; stage: StageView
         <AddressPanel request={request} />
       </Columns>
     </Columns>
+  );
+}
+
+function ApprovalLayout({ request, stage }: { request: RequestView; stage: StageView }) {
+  return (
+    <>
+      <Columns>
+        <ApprovalDecisionForm request={request} stage={stage} />
+        <ApprovalTermsPanel request={request} stage={stage} />
+      </Columns>
+      <RequestOverview request={request} />
+    </>
   );
 }

@@ -42,7 +42,7 @@ export function MyTasksPage() {
         />
       ),
     },
-    { key: 'sla', title: t.columns.sla, width: 300, render: () => <StageSlaCell /> },
+    { key: 'sla', title: t.columns.sla, width: 300, render: (s) => <StageSlaCell stage={s} /> },
     {
       key: 'action',
       title: '',
