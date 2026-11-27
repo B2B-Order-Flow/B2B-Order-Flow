@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -177,6 +178,157 @@ class CoreApiContractTest {
     }
 
     /**
+     * Шлюз валидирует тело своим DTO. Если здесь `breakdown` станет объектом или
+     * строкой, BFF начнёт отклонять валидный запрос — тест должен ловить это первым.
+     */
+    @Test
+    void cancellationCostsBreakdownIsArrayOfItems() {
+        Map<String, Object> breakdown = asMap(properties("CancellationCostsPayload").get("breakdown"),
+                "CancellationCostsPayload.breakdown");
+        assertEquals("array", breakdown.get("type"), "breakdown должен быть массивом");
+        assertEquals(1, ((Number) breakdown.get("minItems")).intValue(), "breakdown не может быть пустым");
+        assertEquals("#/components/schemas/CancellationCostItem",
+                asMap(breakdown.get("items"), "CancellationCostsPayload.breakdown.items").get("$ref"));
+
+        assertEquals(Set.of("description", "amount"),
+                new HashSet<>(asList(schema("CancellationCostItem").get("required"),
+                        "CancellationCostItem.required")));
+        assertMinLength("CancellationCostItem", "description");
+        assertEquals("^[0-9]+\\.[0-9]{2}$",
+                asMap(properties("CancellationCostItem").get("amount"),
+                        "CancellationCostItem.amount").get("pattern"));
+    }
+
+    @Test
+    void requiredTextFieldsRejectBlankStrings() {
+        Map<String, List<String>> fields = Map.ofEntries(
+                Map.entry("StageDecisionPayload", List.of("comment", "reasonCode")),
+                Map.entry("StageReturnPayload", List.of("comment")),
+                Map.entry("StageProblemPayload", List.of("comment")),
+                Map.entry("ContractChangeRequestPayload", List.of("comment")),
+                Map.entry("DefectClaimPayload", List.of("reason")),
+                Map.entry("CancellationReasonPayload", List.of("reasonCode")),
+                Map.entry("CancellationRejectPayload", List.of("comment")),
+                Map.entry("CancellationCostItem", List.of("description")));
+        for (Map.Entry<String, List<String>> entry : fields.entrySet()) {
+            for (String field : entry.getValue()) {
+                assertMinLength(entry.getKey(), field);
+            }
+        }
+    }
+
+    @Test
+    void commandRequiredFieldsAreDeclared() {
+        Map<String, Set<String>> required = Map.ofEntries(
+                Map.entry("StageDecisionPayload", Set.of("decision", "version")),
+                Map.entry("StageReturnPayload", Set.of("comment", "version")),
+                Map.entry("StageProblemPayload", Set.of("problem", "comment", "version")),
+                Map.entry("ContractChangeRequestPayload", Set.of("comment", "version")),
+                Map.entry("DefectClaimPayload", Set.of("reason", "version")),
+                Map.entry("CancellationCostsPayload", Set.of("amount", "breakdown", "version")),
+                Map.entry("ConfirmCostsPayload", Set.of("confirmed", "version")),
+                Map.entry("CancellationRejectPayload", Set.of("comment", "version")),
+                Map.entry("UpdateRequestDataPayload", Set.of("version")));
+        for (Map.Entry<String, Set<String>> entry : required.entrySet()) {
+            assertEquals(entry.getValue(), required(entry.getKey()),
+                    "Обязательные поля " + entry.getKey() + " не совпадают с контрактом");
+        }
+    }
+
+    @Test
+    void confirmCostsDocumentsConditionalComment() {
+        String description = String.valueOf(schema("ConfirmCostsPayload").get("description"));
+        assertTrue(description.contains("confirmed = false"),
+                "Описание должно фиксировать условную обязательность comment");
+        Map<String, Object> comment = asMap(properties("ConfirmCostsPayload").get("comment"),
+                "ConfirmCostsPayload.comment");
+        assertTrue(String.valueOf(comment.get("description")).contains("confirmed = false"));
+        assertMinLength("ConfirmCostsPayload", "comment");
+    }
+
+    /**
+     * Аналитика задаёт `status` и `segment` списками (archive-export.md, 4).
+     * В контракте и в шлюзе они должны быть массивами, а не одиночными строками.
+     */
+    @Test
+    void archiveFiltersFollowAnalyticsLists() {
+        Map<String, Object> status = parameter("/internal/v1/archive/requests", "get", "status");
+        Map<String, Object> statusSchema = asMap(status.get("schema"), "archive.status.schema");
+        assertEquals("array", statusSchema.get("type"));
+        assertEquals("#/components/schemas/RequestStatus",
+                asMap(statusSchema.get("items"), "archive.status.items").get("$ref"));
+        assertEquals("form", status.get("style"));
+        assertEquals(Boolean.TRUE, status.get("explode"));
+
+        Map<String, Object> segment = parameter("/internal/v1/archive/requests", "get", "segment");
+        Map<String, Object> segmentSchema = asMap(segment.get("schema"), "archive.segment.schema");
+        assertEquals("array", segmentSchema.get("type"));
+        assertEquals("string", asMap(segmentSchema.get("items"), "archive.segment.items").get("type"));
+
+        assertEquals("array", asMap(properties("ExportFilters").get("status"),
+                "ExportFilters.status").get("type"));
+        assertEquals("array", asMap(properties("ExportFilters").get("segment"),
+                "ExportFilters.segment").get("type"));
+    }
+
+    @Test
+    void archiveDeclaresPageAndSize() {
+        for (String name : List.of("page", "size")) {
+            Map<String, Object> parameter = parameter("/internal/v1/archive/requests", "get", name);
+            assertEquals("query", parameter.get("in"));
+            assertEquals(Boolean.FALSE, parameter.get("required"));
+            assertEquals("integer", asMap(parameter.get("schema"), "archive." + name + ".schema").get("type"));
+        }
+        Map<String, Object> size = asMap(parameter("/internal/v1/archive/requests", "get", "size").get("schema"),
+                "archive.size.schema");
+        assertEquals(100, ((Number) size.get("maximum")).intValue());
+    }
+
+    @Test
+    void updateRequestDataSupportsMergeSemantics() {
+        String description = String.valueOf(schema("UpdateRequestDataPayload").get("description"));
+        assertTrue(description.contains("поле пропущено"), "Должно быть описано сохранение пропущенного поля");
+        assertTrue(description.contains("явный `null`"), "Должна быть описана очистка через null");
+        assertTrue(description.contains("T10"), "Должна быть ссылка на обязательность полей при T10");
+
+        for (String field : List.of("desiredDate", "contactName", "contactPhone", "discountPercent")) {
+            Map<String, Object> property = asMap(properties("UpdateRequestDataPayload").get(field),
+                    "UpdateRequestDataPayload." + field);
+            assertEquals(Boolean.TRUE, property.get("nullable"),
+                    field + " должен допускать явный null для очистки");
+        }
+        for (String field : List.of("address", "requestedSpeedMbps", "tariffType", "contractType")) {
+            Map<String, Object> property = asMap(properties("UpdateRequestDataPayload").get(field),
+                    "UpdateRequestDataPayload." + field);
+            assertFalse(Boolean.TRUE.equals(property.get("nullable")),
+                    field + " нельзя очищать через null");
+        }
+
+        String discount = String.valueOf(asMap(properties("UpdateRequestDataPayload").get("discountPercent"),
+                "UpdateRequestDataPayload.discountPercent").get("description"));
+        assertTrue(discount.contains("null"), "Для скидки должен быть описан явный null");
+        assertTrue(discount.contains("пропущенное"), "Для скидки должно быть описано сохранение при пропуске");
+    }
+
+    @Test
+    void weekThreeOperationsDocumentResponseSchemas() {
+        assertEquals("#/components/schemas/StageView",
+                responseSchemaRef("/internal/v1/stages/{stageId}/decision", "post", "200"));
+        assertEquals("#/components/schemas/StageView",
+                responseSchemaRef("/internal/v1/stages/{stageId}/return", "post", "200"));
+        assertEquals("#/components/schemas/CancellationRequestView",
+                responseSchemaRef("/internal/v1/cancellation-requests/{cancellationId}/costs", "post", "200"));
+        assertEquals("#/components/schemas/CancellationRequestView",
+                responseSchemaRef("/internal/v1/cancellation-requests/{cancellationId}/approve", "post", "200"));
+        assertEquals("#/components/schemas/RequestPage",
+                responseSchemaRef("/internal/v1/archive/requests", "get", "200"));
+        assertEquals("#/components/schemas/ExportJobView",
+                responseSchemaRef("/internal/v1/exports/requests", "post", "202"));
+        assertEquals("#/components/schemas/ExportJobView",
+                responseSchemaRef("/internal/v1/exports/{exportId}", "get", "200"));
+    }
+
+    /**
      * Новые операции должны жить в новых тегах: генератор создаёт по интерфейсу на тег,
      * и добавление метода в существующий RequestsApi/StagesApi сломало бы контроллеры.
      */
@@ -231,19 +383,79 @@ class CoreApiContractTest {
     }
 
     private static Map<String, Object> properties(String schemaName) {
-        return asMap(schema(schemaName).get("properties"),
-                "components.schemas." + schemaName + ".properties");
+        Map<String, Object> merged = new HashMap<>();
+        collectProperties(schema(schemaName), merged, "components.schemas." + schemaName);
+        return merged;
+    }
+
+    private static void collectProperties(Map<String, Object> schema, Map<String, Object> target, String what) {
+        Object reference = schema.get("$ref");
+        if (reference instanceof String ref && ref.startsWith("#/components/schemas/")) {
+            String name = ref.substring("#/components/schemas/".length());
+            collectProperties(schema(name), target, ref);
+        }
+        Object properties = schema.get("properties");
+        if (properties != null) {
+            target.putAll(asMap(properties, what + ".properties"));
+        }
+        Object allOf = schema.get("allOf");
+        if (allOf != null) {
+            for (Object part : asList(allOf, what + ".allOf")) {
+                collectProperties(asMap(part, what + ".allOf[]"), target, what + ".allOf[]");
+            }
+        }
+    }
+
+    private static Set<Object> required(String schemaName) {
+        Set<Object> merged = new HashSet<>();
+        collectRequired(schema(schemaName), merged);
+        return merged;
+    }
+
+    private static void collectRequired(Map<String, Object> schema, Set<Object> target) {
+        Object reference = schema.get("$ref");
+        if (reference instanceof String ref && ref.startsWith("#/components/schemas/")) {
+            collectRequired(schema(ref.substring("#/components/schemas/".length())), target);
+        }
+        Object required = schema.get("required");
+        if (required != null) {
+            target.addAll(asList(required, "required"));
+        }
+        Object allOf = schema.get("allOf");
+        if (allOf != null) {
+            for (Object part : asList(allOf, "allOf")) {
+                collectRequired(asMap(part, "allOf[]"), target);
+            }
+        }
+    }
+
+    private static void assertMinLength(String schemaName, String field) {
+        Map<String, Object> property = asMap(properties(schemaName).get(field),
+                schemaName + "." + field);
+        assertEquals(1, ((Number) property.get("minLength")).intValue(),
+                schemaName + "." + field + " должен запрещать пустую строку");
     }
 
     private static Map<String, Object> parameter(String path, String method, String name) {
         List<Map<String, Object>> parameters = asList(operation(path, method).get("parameters"),
                 path + " " + method + ": parameters");
         for (Map<String, Object> parameter : parameters) {
-            if (name.equals(parameter.get("name"))) {
-                return parameter;
+            Map<String, Object> resolved = resolveParameter(parameter);
+            if (name.equals(resolved.get("name"))) {
+                return resolved;
             }
         }
         return fail("У " + method.toUpperCase() + " " + path + " нет параметра " + name);
+    }
+
+    private static Map<String, Object> resolveParameter(Map<String, Object> parameter) {
+        Object reference = parameter.get("$ref");
+        if (reference instanceof String ref && ref.startsWith("#/components/parameters/")) {
+            Map<String, Object> components = asMap(document.get("components"), "components");
+            Map<String, Object> parameters = asMap(components.get("parameters"), "components.parameters");
+            return asMap(parameters.get(ref.substring("#/components/parameters/".length())), ref);
+        }
+        return parameter;
     }
 
     private static String responseSchemaRef(String path, String method, String status) {
