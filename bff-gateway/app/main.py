@@ -292,7 +292,9 @@ async def assign_manager(request_id: str, request: Request, client: CoreClient =
 
 async def validated_body(request: Request, model: type[Command], *, keep_none: bool = False):
     try:
-        return model.model_validate(await read_body(request)).model_dump(mode="json", exclude_none=not keep_none)
+        return model.model_validate(await read_body(request)).model_dump(
+            mode="json", exclude_none=not keep_none, exclude_unset=keep_none
+        )
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 

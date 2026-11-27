@@ -582,18 +582,23 @@ components:
         comment: {type: string, maxLength: 4000}
         version: {type: integer, minimum: 0}
     ExportCommand:
+      oneOf:
+        - $ref: '#/components/schemas/CsvExportCommand'
+        - $ref: '#/components/schemas/PdfExportCommand'
+    CsvExportCommand:
       type: object
       required: [format]
       additionalProperties: false
       properties:
-        format: {type: string, enum: [CSV, PDF]}
+        format: {type: string, enum: [CSV]}
         filters: {type: object, additionalProperties: true}
+    PdfExportCommand:
+      type: object
+      required: [format, requestId]
+      additionalProperties: false
+      properties:
+        format: {type: string, enum: [PDF]}
         requestId: {type: string, format: uuid}
-      oneOf:
-        - required: [format]
-          properties: {format: {type: string, enum: [CSV]}}
-        - required: [format, requestId]
-          properties: {format: {type: string, enum: [PDF]}}
     PageInfo:
       type: object
       required: [number, size, totalElements, totalPages]

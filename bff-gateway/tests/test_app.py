@@ -269,28 +269,33 @@ async def test_week_three_patch_and_payloads_match_core_contract():
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
             data = await api.patch(
                 "/api/v1/requests/request-1/data",
-                json={"contactName": None, "discountPercent": None, "version": 2},
+                json={"discountPercent": None, "version": 2},
+            )
+            data_omitted = await api.patch(
+                "/api/v1/requests/request-1/data",
+                json={"contactName": "Updated", "version": 3},
             )
             problem = await api.post(
                 "/api/v1/stages/stage-1/problem",
-                json={"problem": "NO_ACCESS", "comment": "Access is unavailable", "version": 3},
+                json={"problem": "NO_ACCESS", "comment": "Access is unavailable", "version": 4},
             )
             claim = await api.post(
                 "/api/v1/requests/request-1/defect-claim",
-                json={"reason": "Service defect", "version": 4},
+                json={"reason": "Service defect", "version": 5},
             )
     finally:
         app.dependency_overrides.clear()
 
     assert data.status_code == 200
+    assert data_omitted.status_code == 200
     assert problem.status_code == 200
     assert claim.status_code == 200
-    assert [method for method, _, _ in captured] == ["PATCH", "POST", "POST"]
+    assert [method for method, _, _ in captured] == ["PATCH", "PATCH", "POST", "POST"]
     assert captured[0][1] == "/internal/v1/requests/request-1/data"
-    assert b'"contactName":null' in captured[0][2]
     assert b'"discountPercent":null' in captured[0][2]
-    assert b'"problem":"NO_ACCESS"' in captured[1][2]
-    assert b'"reason":"Service defect"' in captured[2][2]
+    assert b'"discountPercent"' not in captured[1][2]
+    assert b'"problem":"NO_ACCESS"' in captured[2][2]
+    assert b'"reason":"Service defect"' in captured[3][2]
 
 
 @pytest.mark.asyncio
@@ -358,6 +363,28 @@ async def test_pdf_export_requires_request_id():
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
             response = await api.post("/api/v1/exports/requests", json={"format": "PDF"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_csv_export_rejects_request_id():
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"ok": True})),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            response = await api.post(
+                "/api/v1/exports/requests",
+                json={"format": "CSV", "requestId": "00000000-0000-0000-0000-000000000001"},
+            )
     finally:
         app.dependency_overrides.clear()
 
