@@ -1,3 +1,4 @@
+import json
 from json import loads
 
 import httpx
@@ -292,6 +293,8 @@ async def test_week_three_patch_and_payloads_match_core_contract():
     assert claim.status_code == 200
     assert [method for method, _, _ in captured] == ["PATCH", "PATCH", "POST", "POST"]
     assert captured[0][1] == "/internal/v1/requests/request-1/data"
+    assert json.loads(captured[0][2]) == {"discountPercent": None, "version": 2}
+    assert json.loads(captured[1][2]) == {"contactName": "Updated", "version": 3}
     assert b'"discountPercent":null' in captured[0][2]
     assert b'"discountPercent"' not in captured[1][2]
     assert b'"problem":"NO_ACCESS"' in captured[2][2]
