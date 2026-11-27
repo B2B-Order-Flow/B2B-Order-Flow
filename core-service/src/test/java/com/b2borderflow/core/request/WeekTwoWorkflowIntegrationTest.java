@@ -153,6 +153,22 @@ class WeekTwoWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void techResultRejectsReasonFromAnotherStage() {
+        Bootstrap flow = bootstrapWithManager("SMB");
+        UUID stageId = techCheckStage(flow);
+        String techToken = login("tech.specialist");
+        long stageVersion = claim(stageId, techToken);
+
+        ApiResponse result = post("/internal/v1/stages/" + stageId + "/tech-result",
+                techToken, Role.TECH_SPECIALIST,
+                Map.of("result", "NONE", "reasonCode", "FIN_DEBT",
+                        "comment", "Debt is not a technical reason", "version", stageVersion));
+
+        assertThat(result.status()).isEqualTo(422);
+        assertThat(result.body().get("code")).isEqualTo("VALIDATION_FAILED");
+    }
+
+    @Test
     void withConstructionIsRejectedUntilWeekThree() {
         Bootstrap flow = bootstrapWithManager("SMB");
         UUID stageId = techCheckStage(flow);
