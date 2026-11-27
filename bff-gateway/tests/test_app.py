@@ -269,7 +269,7 @@ async def test_week_three_patch_and_payloads_match_core_contract():
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
             data = await api.patch(
                 "/api/v1/requests/request-1/data",
-                json={"companyName": "Updated", "version": 2},
+                json={"contactName": None, "discountPercent": None, "version": 2},
             )
             problem = await api.post(
                 "/api/v1/stages/stage-1/problem",
@@ -287,6 +287,8 @@ async def test_week_three_patch_and_payloads_match_core_contract():
     assert claim.status_code == 200
     assert [method for method, _, _ in captured] == ["PATCH", "POST", "POST"]
     assert captured[0][1] == "/internal/v1/requests/request-1/data"
+    assert b'"contactName":null' in captured[0][2]
+    assert b'"discountPercent":null' in captured[0][2]
     assert b'"problem":"NO_ACCESS"' in captured[1][2]
     assert b'"reason":"Service defect"' in captured[2][2]
 

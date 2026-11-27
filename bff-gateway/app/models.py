@@ -78,6 +78,23 @@ class FlexibleCommand(Command):
     model_config = ConfigDict(extra="allow")
 
 
+class UpdateRequestDataCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=0)
+    address: str | None = Field(default=None, max_length=500)
+    requestedSpeedMbps: int | None = Field(default=None, ge=1, le=100000)
+    desiredDate: date | None = None
+    contactName: str | None = Field(default=None, max_length=255)
+    contactPhone: str | None = Field(default=None, max_length=32)
+    contractPreference: ContractType | None = None
+    clientComment: str | None = Field(default=None, max_length=4000)
+    tariffType: TariffType | None = None
+    discountPercent: str | None = Field(default=None, pattern=r"^[0-9]{1,3}\.[0-9]{2}$")
+    speedMbps: int | None = Field(default=None, ge=1, le=100000)
+    contractType: ContractType | None = None
+
+
 class StageReturnCommand(Command):
     comment: str = Field(min_length=1, max_length=4000)
 

@@ -27,11 +27,11 @@ from .models import (
     DefectClaimCommand,
     ExportCommand,
     ExtendPauseCommand,
-    FlexibleCommand,
     PauseCommand,
     StageProblemCommand,
     StageReturnCommand,
     TechResultCommand,
+    UpdateRequestDataCommand,
 )
 from .proxy import proxy
 from .websocket import WebSocketHub, websocket_session
@@ -235,9 +235,8 @@ async def delete_request(request_id: str, request: Request, client: CoreClient =
 
 @app.patch("/api/v1/requests/{request_id}/data", operation_id="update_request_data")
 async def update_request_data(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(
-        request, client, f"/api/v1/requests/{request_id}/data", FlexibleCommand, method="PATCH"
-    )
+    body = await validated_body(request, UpdateRequestDataCommand, keep_none=True)
+    return await proxy(request, client, "PATCH", f"/api/v1/requests/{request_id}/data", body=body)
 
 
 @app.post("/api/v1/requests/{request_id}/resubmit", operation_id="resubmit_request")
@@ -291,9 +290,9 @@ async def assign_manager(request_id: str, request: Request, client: CoreClient =
     )
 
 
-async def validated_body(request: Request, model: type[Command]):
+async def validated_body(request: Request, model: type[Command], *, keep_none: bool = False):
     try:
-        return model.model_validate(await read_body(request)).model_dump(mode="json", exclude_none=True)
+        return model.model_validate(await read_body(request)).model_dump(mode="json", exclude_none=not keep_none)
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
 
