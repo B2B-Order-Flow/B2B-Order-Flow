@@ -328,7 +328,7 @@ async def test_week_three_cancellation_costs_and_pdf_export_contract():
             )
             export = await api.post(
                 "/api/v1/exports/requests",
-                json={"format": "PDF", "requestId": "request-1"},
+                json={"format": "PDF", "requestId": "00000000-0000-0000-0000-000000000001"},
             )
     finally:
         app.dependency_overrides.clear()
@@ -340,7 +340,7 @@ async def test_week_three_cancellation_costs_and_pdf_export_contract():
     assert b'"comment":"Changed plans"' in captured[0][2]
     assert b'"breakdown":[{"description":"Works","amount":"45000.00"}]' in captured[1][2]
     assert b'"confirmed":false' in captured[2][2]
-    assert b'"requestId":"request-1"' in captured[3][2]
+    assert b'"requestId":"00000000-0000-0000-0000-000000000001"' in captured[3][2]
 
 
 @pytest.mark.asyncio

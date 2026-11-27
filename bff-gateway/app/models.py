@@ -128,7 +128,7 @@ class ExportCommand(BaseModel):
 
     format: str = Field(pattern=r"^(CSV|PDF)$")
     filters: dict[str, object] | None = None
-    requestId: str | None = None
+    requestId: UUID | None = None
 
     @model_validator(mode="after")
     def validate_export_target(self):

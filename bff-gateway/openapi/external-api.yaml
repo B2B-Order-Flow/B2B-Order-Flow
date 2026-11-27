@@ -572,10 +572,18 @@ components:
         filters: {type: object, additionalProperties: true}
         requestId: {type: string, format: uuid}
       oneOf:
-        - required: [format, filters]
-          properties: {format: {const: CSV}}
+        - required: [format]
+          properties: {format: {type: string, enum: [CSV]}}
         - required: [format, requestId]
-          properties: {format: {const: PDF}}
+          properties: {format: {type: string, enum: [PDF]}}
+    PageInfo:
+      type: object
+      required: [number, size, totalElements, totalPages]
+      properties:
+        number: {type: integer}
+        size: {type: integer}
+        totalElements: {type: integer, format: int64}
+        totalPages: {type: integer}
     RequestRevisionPage:
       type: object
       required: [content, page]
