@@ -289,3 +289,74 @@ async def test_week_three_patch_and_payloads_match_core_contract():
     assert captured[0][1] == "/internal/v1/requests/request-1/data"
     assert b'"problem":"NO_ACCESS"' in captured[1][2]
     assert b'"reason":"Service defect"' in captured[2][2]
+
+
+@pytest.mark.asyncio
+async def test_week_three_cancellation_costs_and_pdf_export_contract():
+    captured: list[tuple[str, str, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append((request.method, request.url.path, request.content))
+        return httpx.Response(200, json={"ok": True})
+
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(handler),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            cancellation = await api.post(
+                "/api/v1/requests/request-1/cancellation-requests",
+                json={"reasonCode": "CLIENT_OTHER", "comment": "Changed plans", "version": 1},
+            )
+            costs = await api.post(
+                "/api/v1/cancellation-requests/cancel-1/costs",
+                json={
+                    "amount": "45000.00",
+                    "breakdown": [{"description": "Works", "amount": "45000.00"}],
+                    "comment": "Calculation",
+                    "version": 2,
+                },
+            )
+            returned = await api.post(
+                "/api/v1/cancellation-requests/cancel-1/confirm-costs",
+                json={"confirmed": False, "comment": "Please recalculate", "version": 3},
+            )
+            export = await api.post(
+                "/api/v1/exports/requests",
+                json={"format": "PDF", "requestId": "request-1"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert cancellation.status_code == 200
+    assert costs.status_code == 200
+    assert returned.status_code == 200
+    assert export.status_code == 200
+    assert b'"comment":"Changed plans"' in captured[0][2]
+    assert b'"breakdown":[{"description":"Works","amount":"45000.00"}]' in captured[1][2]
+    assert b'"confirmed":false' in captured[2][2]
+    assert b'"requestId":"request-1"' in captured[3][2]
+
+
+@pytest.mark.asyncio
+async def test_pdf_export_requires_request_id():
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"ok": True})),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            response = await api.post("/api/v1/exports/requests", json={"format": "PDF"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
