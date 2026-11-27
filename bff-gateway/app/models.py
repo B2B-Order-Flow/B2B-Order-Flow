@@ -83,8 +83,8 @@ class StageReturnCommand(Command):
 
 
 class StageProblemCommand(Command):
-    problemCode: str = Field(min_length=1, max_length=100)
-    comment: str | None = Field(default=None, max_length=4000)
+    problem: str = Field(pattern=r"^(NO_ACCESS|CONNECTION_IMPOSSIBLE)$")
+    comment: str = Field(min_length=1, max_length=4000)
 
 
 class CancelCommand(Command):
@@ -94,3 +94,25 @@ class CancelCommand(Command):
 
 class CommentCommand(Command):
     comment: str = Field(min_length=1, max_length=4000)
+
+
+class DefectClaimCommand(Command):
+    reason: str = Field(min_length=1, max_length=4000)
+
+
+class CancellationRequestCommand(Command):
+    reasonCode: str = Field(min_length=1, max_length=100)
+
+
+class CancellationCostsCommand(Command):
+    amount: str = Field(pattern=r"^[0-9]+\.[0-9]{2}$")
+    breakdown: dict[str, object]
+
+
+class ConfirmCancellationCostsCommand(Command):
+    confirmed: bool
+
+
+class ExportCommand(Command):
+    format: str = Field(pattern=r"^(CSV|PDF)$")
+    filters: dict[str, object] = Field(default_factory=dict)

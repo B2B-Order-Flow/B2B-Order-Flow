@@ -16,11 +16,16 @@ from .headers import correlation_id_context, correlation_middleware
 from .models import (
     AssignStageCommand,
     CancelCommand,
+    CancellationCostsCommand,
+    CancellationRequestCommand,
     Command,
     CommentCommand,
     CommercialTerms,
+    ConfirmCancellationCostsCommand,
     ContractConcludedCommand,
     DecisionCommand,
+    DefectClaimCommand,
+    ExportCommand,
     ExtendPauseCommand,
     FlexibleCommand,
     PauseCommand,
@@ -230,7 +235,9 @@ async def delete_request(request_id: str, request: Request, client: CoreClient =
 
 @app.patch("/api/v1/requests/{request_id}/data", operation_id="update_request_data")
 async def update_request_data(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, f"/api/v1/requests/{request_id}/data", FlexibleCommand)
+    return await request_command(
+        request, client, f"/api/v1/requests/{request_id}/data", FlexibleCommand, method="PATCH"
+    )
 
 
 @app.post("/api/v1/requests/{request_id}/resubmit", operation_id="resubmit_request")
@@ -370,8 +377,14 @@ async def activate_stage(stage_id: str, request: Request, client: CoreClient = D
     )
 
 
-async def request_command(request: Request, client: CoreClient, path: str, model: type[Command] = Command):
-    return await proxy(request, client, "POST", path, body=await validated_body(request, model))
+async def request_command(
+    request: Request,
+    client: CoreClient,
+    path: str,
+    model: type[Command] = Command,
+    method: str = "POST",
+):
+    return await proxy(request, client, method, path, body=await validated_body(request, model))
 
 
 @app.post("/api/v1/requests/{request_id}/contract/sent", operation_id="contract_sent")
@@ -415,7 +428,7 @@ async def contract_change_request(request_id: str, request: Request, client: Cor
 
 @app.post("/api/v1/requests/{request_id}/defect-claim", operation_id="defect_claim")
 async def defect_claim(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, f"/api/v1/requests/{request_id}/defect-claim", CommentCommand)
+    return await request_command(request, client, f"/api/v1/requests/{request_id}/defect-claim", DefectClaimCommand)
 
 
 @app.post("/api/v1/requests/{request_id}/cancel", operation_id="cancel_request")
@@ -426,7 +439,7 @@ async def cancel_request(request_id: str, request: Request, client: CoreClient =
 @app.post("/api/v1/requests/{request_id}/cancellation-requests", operation_id="create_cancellation_request")
 async def create_cancellation_request(request_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
     return await request_command(
-        request, client, f"/api/v1/requests/{request_id}/cancellation-requests", FlexibleCommand
+        request, client, f"/api/v1/requests/{request_id}/cancellation-requests", CancellationRequestCommand
     )
 
 
@@ -443,14 +456,16 @@ async def cancellation_command(
 
 @app.post("/api/v1/cancellation-requests/{cancellation_id}/costs", operation_id="set_cancellation_costs")
 async def set_cancellation_costs(cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)):
-    return await cancellation_command(cancellation_id, request, client, "costs", FlexibleCommand)
+    return await cancellation_command(cancellation_id, request, client, "costs", CancellationCostsCommand)
 
 
 @app.post("/api/v1/cancellation-requests/{cancellation_id}/confirm-costs", operation_id="confirm_cancellation_costs")
 async def confirm_cancellation_costs(
     cancellation_id: str, request: Request, client: CoreClient = Depends(get_core_client)
 ):
-    return await cancellation_command(cancellation_id, request, client, "confirm-costs", FlexibleCommand)
+    return await cancellation_command(
+        cancellation_id, request, client, "confirm-costs", ConfirmCancellationCostsCommand
+    )
 
 
 @app.post("/api/v1/cancellation-requests/{cancellation_id}/approve", operation_id="approve_cancellation")
@@ -485,7 +500,7 @@ async def list_archived_requests(request: Request, client: CoreClient = Depends(
 
 @app.post("/api/v1/exports/requests", operation_id="create_requests_export")
 async def create_requests_export(request: Request, client: CoreClient = Depends(get_core_client)):
-    return await request_command(request, client, "/api/v1/exports/requests", FlexibleCommand)
+    return await request_command(request, client, "/api/v1/exports/requests", ExportCommand)
 
 
 @app.get("/api/v1/exports/{export_id}", operation_id="get_requests_export")

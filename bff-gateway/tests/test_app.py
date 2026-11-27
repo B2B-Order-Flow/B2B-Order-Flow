@@ -247,3 +247,45 @@ async def test_week_three_stage_decision_is_proxied():
     assert response.status_code == 200
     assert captured["path"] == "/internal/v1/stages/stage-1/decision"
     assert b'"decision":"APPROVE"' in captured["body"]
+
+
+@pytest.mark.asyncio
+async def test_week_three_patch_and_payloads_match_core_contract():
+    captured: list[tuple[str, str, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append((request.method, request.url.path, request.content))
+        return httpx.Response(200, json={"ok": True})
+
+    async def override() -> CoreClient:
+        return CoreClient(
+            Settings(core_url="http://core.test", internal_token="test-token"),
+            transport=httpx.MockTransport(handler),
+        )
+
+    app.dependency_overrides[get_core_client] = override
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as api:
+            data = await api.patch(
+                "/api/v1/requests/request-1/data",
+                json={"companyName": "Updated", "version": 2},
+            )
+            problem = await api.post(
+                "/api/v1/stages/stage-1/problem",
+                json={"problem": "NO_ACCESS", "comment": "Access is unavailable", "version": 3},
+            )
+            claim = await api.post(
+                "/api/v1/requests/request-1/defect-claim",
+                json={"reason": "Service defect", "version": 4},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert data.status_code == 200
+    assert problem.status_code == 200
+    assert claim.status_code == 200
+    assert [method for method, _, _ in captured] == ["PATCH", "POST", "POST"]
+    assert captured[0][1] == "/internal/v1/requests/request-1/data"
+    assert b'"problem":"NO_ACCESS"' in captured[1][2]
+    assert b'"reason":"Service defect"' in captured[2][2]

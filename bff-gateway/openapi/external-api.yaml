@@ -293,6 +293,9 @@ paths:
     get:
       operationId: requestRevisions
       security: [{bearerAuth: []}]
+      parameters:
+        - { $ref: '#/components/parameters/Page'}
+        - { $ref: '#/components/parameters/Size'}
       responses: {'200': {description: Request revisions}}
   /api/v1/requests/{requestId}/route:
     parameters: [{ $ref: '#/components/parameters/RequestId'}]
@@ -319,7 +322,7 @@ paths:
     post:
       operationId: stageProblem
       security: [{bearerAuth: []}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StageProblemCommand'}}}}
       responses: {'200': {description: Stage problem}}
   /api/v1/requests/{requestId}/contract/change-request:
     parameters: [{ $ref: '#/components/parameters/RequestId'}]
@@ -333,7 +336,7 @@ paths:
     post:
       operationId: defectClaim
       security: [{bearerAuth: []}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DefectClaimCommand'}}}}
       responses: {'200': {description: Defect claim}}
   /api/v1/requests/{requestId}/cancel:
     parameters: [{ $ref: '#/components/parameters/RequestId'}]
@@ -347,25 +350,29 @@ paths:
     get:
       operationId: listCancellationRequests
       security: [{bearerAuth: []}]
+      parameters:
+        - { $ref: '#/components/parameters/Page'}
+        - { $ref: '#/components/parameters/Size'}
       responses: {'200': {description: Cancellation requests}}
     post:
       operationId: createCancellationRequest
       security: [{bearerAuth: []}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CancellationRequestCommand'}}}}
       responses: {'201': {description: Cancellation request created}}
   /api/v1/cancellation-requests/{cancellationId}/costs:
     parameters: [{ $ref: '#/components/parameters/CancellationId'}]
     post:
       operationId: setCancellationCosts
       security: [{bearerAuth: []}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CancellationCostsCommand'}}}}
       responses: {'200': {description: Costs set}}
   /api/v1/cancellation-requests/{cancellationId}/confirm-costs:
     parameters: [{ $ref: '#/components/parameters/CancellationId'}]
     post:
       operationId: confirmCancellationCosts
       security: [{bearerAuth: []}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ConfirmCancellationCostsCommand'}}}}
       responses: {'200': {description: Costs confirmed}}
   /api/v1/cancellation-requests/{cancellationId}/approve:
     parameters: [{ $ref: '#/components/parameters/CancellationId'}]
@@ -404,6 +411,11 @@ paths:
     get:
       operationId: getDictionary
       security: [{bearerAuth: []}]
+      parameters:
+        - name: stageType
+          in: query
+          required: false
+          schema: {$ref: '#/components/schemas/StageType'}
       responses: {'200': {description: Dictionary values}}
   /api/v1/requests/{requestId}/from-rejected:
     parameters: [{ $ref: '#/components/parameters/RequestId'}]
@@ -489,6 +501,54 @@ components:
       properties:
         version: {type: integer, minimum: 0}
         managerId: {type: string, format: uuid}
+    StageType:
+      type: string
+      enum: [TECH_CHECK, RECHECK_TECH, LEGAL_APPROVAL, FINANCE_APPROVAL, PROCUREMENT_APPROVAL, MGMT_APPROVAL, CONTRACT_SIGNING, CONSTRUCTION, INSTALLATION, ACTIVATION, REMEDIATION, CLOSING]
+    StageProblemCommand:
+      type: object
+      required: [problem, comment, version]
+      additionalProperties: false
+      properties:
+        problem: {type: string, enum: [NO_ACCESS, CONNECTION_IMPOSSIBLE]}
+        comment: {type: string, minLength: 1, maxLength: 4000}
+        version: {type: integer, minimum: 0}
+    DefectClaimCommand:
+      type: object
+      required: [reason, version]
+      additionalProperties: false
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 4000}
+        version: {type: integer, minimum: 0}
+    CancellationRequestCommand:
+      type: object
+      required: [reasonCode, version]
+      additionalProperties: false
+      properties:
+        reasonCode: {type: string, minLength: 1, maxLength: 100}
+        version: {type: integer, minimum: 0}
+    CancellationCostsCommand:
+      type: object
+      required: [amount, breakdown, version]
+      additionalProperties: false
+      properties:
+        amount: {type: string, pattern: '^[0-9]+\.[0-9]{2}$'}
+        breakdown: {type: object, additionalProperties: true}
+        version: {type: integer, minimum: 0}
+    ConfirmCancellationCostsCommand:
+      type: object
+      required: [confirmed, version]
+      additionalProperties: false
+      properties:
+        confirmed: {type: boolean}
+        version: {type: integer, minimum: 0}
+    ExportCommand:
+      type: object
+      required: [format, version]
+      additionalProperties: false
+      properties:
+        format: {type: string, enum: [CSV, PDF]}
+        filters: {type: object, additionalProperties: true}
+        version: {type: integer, minimum: 0}
   parameters:
     CorrelationId: {name: X-Correlation-Id, in: header, required: false, schema: {type: string, maxLength: 100}}
     ActiveRole: {name: X-Active-Role, in: header, required: false, schema: {type: string, maxLength: 50}}
