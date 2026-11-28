@@ -264,6 +264,11 @@ class CoreApiContractTest {
         Map<String, Object> segmentSchema = asMap(segment.get("schema"), "archive.segment.schema");
         assertEquals("array", segmentSchema.get("type"));
         assertEquals("string", asMap(segmentSchema.get("items"), "archive.segment.items").get("type"));
+        String segmentDescription = String.valueOf(segment.get("description"));
+        assertTrue(segmentDescription.contains("SMB")
+                        && segmentDescription.contains("LARGE")
+                        && segmentDescription.contains("STRATEGIC"),
+                "В описании segment должны быть перечислены допустимые сегменты");
 
         assertEquals("array", asMap(properties("ExportFilters").get("status"),
                 "ExportFilters.status").get("type"));
