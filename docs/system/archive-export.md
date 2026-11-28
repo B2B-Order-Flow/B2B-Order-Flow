@@ -52,8 +52,10 @@
 ## 4. Поиск и фильтры
 
 ```
-GET /api/v1/archive/requests?status=CLOSED&closedFrom=2026-01-01&segment=STRATEGIC&page=0&size=20&sort=closedAt,desc
+GET /api/v1/archive/requests?status=CLOSED&status=REJECTED&closedFrom=2026-01-01&segment=STRATEGIC&segment=LARGE&page=0&size=20&sort=closedAt,desc
 ```
+
+Списковые параметры `status` и `segment` передаются повтором ключа. В контракте ядра они описаны массивами (`style: form`, `explode: true`), поэтому запрос одного значения остаётся валидным. В BFF это представление синхронизируется в `external-api.yaml`; расхождение считается дефектом контракта.
 
 Фильтруем и сортируем **только по колонкам**. Поля из JSONB в фильтрах запрещены — попытка даёт `422` ([api-contract.md](api-contract.md) §2.1).
 
@@ -65,7 +67,7 @@ GET /api/v1/archive/requests?status=CLOSED&closedFrom=2026-01-01&segment=STRATEG
 | `status` | список | `request.status` |
 | `archived` | boolean | `status ∈ {CLOSED, REJECTED, CANCELLED}` |
 | `requestClass` | `STANDARD` / `EXTENDED` / `LARGE` | `request.request_class` |
-| `segment` | список | `request.segment` |
+| `segment` | список: `SMB`, `LARGE`, `STRATEGIC` | `request.segment` |
 | `address` | подстрока | `request.address` |
 | `speedFrom`, `speedTo` | число | `service_offer.speed_mbps` выбранного варианта |
 | `tariffType`, `contractType` | перечисление | `service_offer.*` |

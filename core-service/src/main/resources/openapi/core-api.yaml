@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: B2B-Order-Flow Core API
-  version: 0.2.0
+  version: 0.4.1
   description: |
     Внутренний контракт транзакционного ядра B2B-Order-Flow. Единственный источник истины
     для API: серверные интерфейсы генерируются из этого файла (`openapi-generator`), контроллеры
@@ -36,11 +36,14 @@ info:
     Бизнес-валидация, права, статусы, принадлежность компании и фильтрация полей по роли.
     BFF проксирует ответ без фильтрации.
 
-    ## Неделя 2
-    Контракт недели 2 покрывает переходы SC-01: T04, T05, T07, T13, T14, T16, T18
-    (docs/plan-week2.md, раздел 2). Согласования, стройка, доработка, отмена и повторная
-    техническая возможность появятся на неделе 3: их эндпоинтов здесь нет, а результат ТВ
-    `WITH_CONSTRUCTION` до недели 3 отклоняется с `409 ILLEGAL_TRANSITION`.
+    ## Недели 2 и 3
+    Контракт недели 2 покрывает переходы SC-01: T04, T05, T07, T13, T14, T16, T18.
+    Контракт недели 3 добавляет доработку и пересборку маршрута (T09, T09b, T10, T12),
+    согласования параллельными волнами (T06, T08, T11), стройку и повторную ТВ
+    (T15, T15b), претензию до приёмки (T17) и отмену по уровням обязательств
+    (T19–T22), справочники причин (docs/plan-week3.md, раздел 2), а также операции П2:
+    новую заявку на основе отклонённой, архив и асинхронный экспорт. Операции П2
+    описаны контрактом; их реализация — отдельная задача.
 servers:
   - url: http://core-service:8080
     description: Приватная сеть Docker Compose
@@ -68,6 +71,22 @@ tags:
     description: Канал событий для шлюза и билет WebSocket
   - name: Users
     description: Сотрудники оператора для назначения исполнителей
+  - name: Rework
+    description: Доработка заявки, ревизии и план маршрута
+  - name: Approvals
+    description: Решения согласующих по этапам согласования
+  - name: Execution
+    description: Проблемы исполнения на объекте
+  - name: Contract
+    description: Изменение условий договора и претензия до приёмки
+  - name: Cancellation
+    description: Отмена заявки и запросы на отмену
+  - name: Dictionaries
+    description: Справочники причин, типов договоров и видов вложений
+  - name: FollowUp
+    description: Новая заявка на основе отклонённой (EC-01)
+  - name: Archive
+    description: Архив заявок и асинхронный экспорт
 paths:
   /internal/v1/auth/register:
     post:
@@ -1269,6 +1288,10 @@ paths:
         события и адресат `userId`, данные клиент забирает по REST. После коммита транзакции
         перехода ядро отправляет сигнал и ставит `notification.published_at`. При подключении
         сначала уходят записи с пустым `published_at` и записи после `Last-Event-ID`, затем новые.
+        Доступ — только по `X-Internal-Token`: канал открывает шлюз, пользовательского JWT у
+        соединения нет.
+      security:
+        - internalToken: []
       parameters:
         - name: Last-Event-ID
           in: header
@@ -1319,6 +1342,10 @@ paths:
         проверка, истёкший или неизвестный билет — `401 UNAUTHORIZED`. Ответ содержит
         пользователя и активную роль, к которой привязан билет; по ним шлюз регистрирует
         соединение и адресует сигналы (docs/system/api-contract.md, 4.4).
+        Доступ — только по `X-Internal-Token`: операцию вызывает шлюз, пользовательского JWT
+        в запросе нет (аутентификация пользователя уже выполнена при выдаче билета).
+      security:
+        - internalToken: []
       requestBody:
         required: true
         content:
@@ -1371,6 +1398,928 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/data:
+    patch:
+      operationId: updateRequestData
+      tags: [Rework]
+      summary: Исправить данные заявки после возврата на доработку
+      description: |
+        Менеджер заявки правит данные после возврата на доработку (T09, T09b, T12).
+        Доступно только в статусе `REWORK` и только менеджеру заявки. Меняются поля
+        заявки и выбранного предложения услуги; тариф, скидка, скорость и тип договора
+        влияют на пересборку маршрута (docs/system/routing-rules.md, 3 и 7). Сама
+        пересборка выполняется повторной отправкой (`POST .../resubmit`, T10), а не
+        этим запросом. Нужен `version` заявки; устаревшая версия — `409 VERSION_CONFLICT`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRequestDataPayload'
+      responses:
+        '200':
+          description: Данные сохранены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/resubmit:
+    post:
+      operationId: resubmitRequest
+      tags: [Rework]
+      summary: Отправить заявку повторно после доработки (T10)
+      description: |
+        Только менеджер заявки и только из статуса `REWORK`. Создаётся новая ревизия
+        (`reason = REWORK`), данные заявки и выбранного предложения сохраняются.
+
+        Если заявку возвращал технический специалист (T09b), при возврате этап
+        `TECH_CHECK` перешёл в `RETURNED`, а его таймер встал на автопаузу `REWORK`.
+        Повторная отправка всегда возобновляет **тот же** этап с тем же `stageId`
+        и продолжает **тот же** таймер с оставшегося времени; этап не пересоздаётся.
+        Это правило действует независимо от того, изменил ли менеджер данные.
+
+        После завершения проверки ТВ T06 запускает согласования, а T07 переводит
+        заявку сразу к договору (`CONTRACT_SIGNING`).
+
+        Пересборка маршрута — отдельное действие. Она выполняется, только если
+        изменились параметры, влияющие на маршрут, и затрагивает этапы согласований
+        после ТВ. При пересборке `routeVersion` увеличивается; `TECH_CHECK` остаётся
+        тем же этапом, а после его завершения T06/T07 строят согласования уже по новой
+        версии. Если параметры не изменились, пересборки нет и `routeVersion` не
+        меняется. Принятые решения согласующих сохраняются, если не изменились
+        параметры их области решения, иначе помечаются `superseded` и этап создаётся
+        заново (docs/system/routing-rules.md, 7). `routeVersion` увеличивается только
+        при пересборке маршрута.
+
+        Дальнейший статус: если заявку возвращал технический специалист — на тот же
+        этап `TECH_CHECK`; если согласований не осталось — в `CONTRACT_SIGNING`,
+        иначе в `IN_APPROVAL`. Автопауза `REWORK` снимается, SLA возобновляется.
+        Ответ — карточка заявки с новым статусом и маршрутом.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Заявка отправлена повторно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/revisions:
+    get:
+      operationId: listRequestRevisions
+      tags: [Rework]
+      summary: Снимки параметров заявки
+      description: |
+        Ревизии заявки, новые сверху: отправка, каждая доработка и пересборка маршрута
+        (docs/system/domain-model.md, 4.2; archive-export.md, 3.1). В каждой ревизии —
+        снимок параметров и отличия от предыдущей; это источник для карточки «что
+        изменилось между ревизиями». Доступно менеджеру заявки, координатору и
+        руководителю B2B; прочим ролям — `403 ACCESS_DENIED`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница ревизий
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestRevisionPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/route:
+    get:
+      operationId: getRequestRoute
+      tags: [Rework]
+      summary: План маршрута заявки
+      description: |
+        План этапов текущей версии маршрута с правилами, из-за которых этап появился
+        (`requiredByRules`), волнами согласований и признаком стройки
+        (docs/system/routing-rules.md, 6). В отличие от `stages` в карточке, план
+        содержит и этапы, которые ещё не созданы: например, управленческое согласование
+        второй волны до завершения первой. Клиенту служебные поля (`queueRole`,
+        `requiredByRules`) не отдаются. Доступ — по правам на заявку; чужая заявка — `404`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: План маршрута
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/from-rejected:
+    post:
+      operationId: createRequestFromRejected
+      tags: [FollowUp]
+      summary: Создать новую заявку на основе отклонённой (EC-01)
+      description: |
+        Представитель компании создаёт новую заявку на основе отклонённой
+        (`status = REJECTED`): и после отказа по ТВ (T05, EC-01), и после отклонения
+        согласующим или руководителем (T08, SC-03 A1). Поля исходной заявки и
+        выбранного предложения услуги копируются, новая заявка начинается с черновика
+        (`DRAFT`) и хранит связь `parentRequestId` с исходной; сама отклонённая заявка
+        не меняется. Доступна только заявка своей компании, чужая — `404`.
+        Неотклонённая заявка — `409 ILLEGAL_TRANSITION`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '201':
+          description: Новая заявка создана
+          headers:
+            Location:
+              description: Ссылка на новую заявку
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/decision:
+    post:
+      operationId: decideStage
+      tags: [Approvals]
+      summary: Решение согласующего по этапу (T08, T09, T11)
+      description: |
+        Решение по этапу согласования (`LEGAL_APPROVAL`, `FINANCE_APPROVAL`,
+        `PROCUREMENT_APPROVAL`, `MGMT_APPROVAL`) активной роли. Этапы одной волны
+        решаются независимо, решение каждого фиксируется отдельно.
+
+        `APPROVE` переводит этап в `DONE`. Следующая волна создаётся только когда
+        все этапы текущей волны имеют статус `DONE`. T11 (переход в
+        `CONTRACT_SIGNING`) выполняется после завершения всех требуемых согласований
+        маршрута: все согласующие этапы `DONE` и новых волн больше нет.
+
+        `RETURN` требует комментарий: этап переходит в `RETURNED`. Волна считается
+        завершённой, когда в ней не осталось этапов в `QUEUED`/`IN_PROGRESS`. Если
+        в завершённой волне есть `RETURNED`, заявка переходит в `REWORK`, даже если
+        последний согласующий этой волны нажал «Согласовать»; следующая волна при
+        этом не создаётся и T11 не выполняется. Возврат с проверки ТВ — отдельная
+        операция `POST /internal/v1/stages/{stageId}/return` (T09b).
+
+        `REJECT` требует комментарий и код причины: T08 переводит заявку в `REJECTED`
+        и отменяет остальные открытые этапы (EC-05), не дожидаясь завершения волны.
+        Этап не в очереди роли — `403 STAGE_NOT_IN_YOUR_QUEUE`; этап уже закрыт —
+        `409 STAGE_ALREADY_DECIDED`. Менеджер заявки не может согласовать свою заявку
+        (EC-18) — `403 SELF_APPROVAL_FORBIDDEN`. Актуальный статус заявки —
+        `GET /internal/v1/requests/{requestId}`.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageDecisionPayload'
+      responses:
+        '200':
+          description: Решение принято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/return:
+    post:
+      operationId: returnStageToRework
+      tags: [Approvals]
+      summary: Вернуть заявку на доработку с проверки ТВ (T09b)
+      description: |
+        Технический специалист возвращает заявку менеджеру, если данные заявки требуют
+        исправления (docs/system/status-model.md, T09b). Комментарий обязателен: что
+        исправить. Этап `TECH_CHECK` переходит в `RETURNED`, его таймер встаёт на
+        автопаузу `REWORK`, заявка переходит в `REWORK`. Возврат с этапа согласования —
+        это `POST /internal/v1/stages/{stageId}/decision` с `decision = RETURN`.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageReturnPayload'
+      responses:
+        '200':
+          description: Заявка возвращена на доработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/stages/{stageId}/problem:
+    post:
+      operationId: reportStageProblem
+      tags: [Execution]
+      summary: Сообщить о проблеме на объекте (T15, EC-11, EC-22)
+      description: |
+        Инженер сообщает о проблеме на этапе исполнения. `NO_ACCESS` — EC-11: заявка
+        остаётся в `IN_EXECUTION`, координатор получает уведомление и ставит ручную
+        паузу `NO_ACCESS` через `POST /stages/{stageId}/sla/pause`. `CONNECTION_IMPOSSIBLE`
+        — EC-22: T15, заявка переходит в `TECH_CHECK`, создаётся этап `RECHECK_TECH`,
+        таймер этапа исполнения встаёт на автопаузу `RECHECK_TECH`; уровень обязательств
+        не снижается (docs/system/status-model.md, 6.1 и 7). Комментарий обязателен.
+      parameters:
+        - $ref: '#/components/parameters/StageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageProblemPayload'
+      responses:
+        '200':
+          description: Проблема зафиксирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/contract/change-request:
+    post:
+      operationId: requestContractChange
+      tags: [Contract]
+      summary: Зафиксировать просьбу клиента изменить условия договора (T12)
+      description: |
+        Менеджер заявки фиксирует просьбу клиента до подписания. Заявка переходит
+        `CONTRACT_SIGNING → REWORK` (T12), этап подписания встаёт на автопаузу `REWORK`,
+        менеджер правит данные и отправляет заявку повторно (T10). Комментарий
+        обязателен: что именно просит изменить клиент.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractChangeRequestPayload'
+      responses:
+        '200':
+          description: Заявка возвращена на доработку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/defect-claim:
+    post:
+      operationId: fileDefectClaim
+      tags: [Contract]
+      summary: Претензия клиента до приёмки (T17)
+      description: |
+        Клиент заявляет мотивированную претензию в статусе `ACTIVATED` до закрытия.
+        Создаётся этап `REMEDIATION` в очереди инженеров, срок приёмки останавливается
+        (`STOPPED`); после устранения замечаний менеджер снова отправляет акт, и срок
+        приёмки запускается заново (docs/system/status-model.md, T17; sla.md, 8).
+        Заявка остаётся в `ACTIVATED`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DefectClaimPayload'
+      responses:
+        '200':
+          description: Претензия принята, создан этап устранения замечаний
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/cancel:
+    post:
+      operationId: cancelRequest
+      tags: [Cancellation]
+      summary: Односторонняя отмена заявки (T19)
+      description: |
+        Односторонняя отмена по матрице уровней обязательств
+        (docs/system/status-model.md, 6.3). Причина обязательна и берётся из
+        `cancel_reason` для стороны инициатора; если причина требует комментария
+        (`requires_comment`), он обязателен. После активации отмена запрещена —
+        `409 CANCEL_AFTER_ACTIVATION` (EC-09). Если способ отмены не соответствует
+        уровню обязательств — `409 CANCEL_METHOD_NOT_ALLOWED`. Открытые этапы
+        отменяются, таймеры останавливаются, создаётся запись `cancellation_request`
+        со способом `UNILATERAL`. Заявка переходит в `CANCELLED`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationReasonPayload'
+      responses:
+        '200':
+          description: Заявка отменена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/requests/{requestId}/cancellation-requests:
+    get:
+      operationId: listCancellationRequests
+      tags: [Cancellation]
+      summary: Запросы на отмену заявки
+      description: |
+        Текущий и прошлые запросы на отмену, новые сверху. Клиент видит только заявки
+        своей компании; служебные поля (кто утвердил и подтвердил затраты) доступны
+        только ролям оператора. Ограничение: не более одного запроса в статусе `OPEN`
+        на заявку (docs/system/domain-model.md, 4.5).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Страница запросов на отмену
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createCancellationRequest
+      tags: [Cancellation]
+      summary: Запрос на отмену по соглашению (T20)
+      description: |
+        Клиент на уровне обязательств 2 или менеджер на уровнях 1–2 создаёт запрос на
+        отмену. Сохраняется `previousStatus`, этапы замораживаются, SLA этапов встаёт
+        на паузу `CANCEL_REVIEW`, запускается контрольный срок `CANCEL_RESPONSE`
+        (docs/system/status-model.md, T20). Второй открытый запрос —
+        `409 CANCEL_REQUEST_EXISTS`; способ не соответствует уровню —
+        `409 CANCEL_METHOD_NOT_ALLOWED`; после активации —
+        `409 CANCEL_AFTER_ACTIVATION` (EC-09). Создание идемпотентно по
+        `Idempotency-Key`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationReasonPayload'
+      responses:
+        '201':
+          description: Запрос на отмену создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/costs:
+    post:
+      operationId: setCancellationCosts
+      tags: [Cancellation]
+      summary: Сумма фактических затрат к компенсации
+      description: |
+        Менеджер фиксирует сумму и расшифровку затрат для отмены по инициативе клиента
+        на уровне 2 (docs/business/business-process.md, 11.4). Сумма и позиции передаются
+        строкой с двумя знаками. После подтверждения финансовым контролёром условия
+        отмены считаются готовыми (`CANCEL_TERMS_READY`). Для запросов оператора и для
+        уровня 1 затраты не выставляются — `409 ILLEGAL_TRANSITION`.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationCostsPayload'
+      responses:
+        '200':
+          description: Сумма затрат зафиксирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/confirm-costs:
+    post:
+      operationId: confirmCancellationCosts
+      tags: [Cancellation]
+      summary: Подтвердить или вернуть сумму затрат
+      description: |
+        Финансовый контролёр подтверждает сумму (`confirmed = true`) или возвращает её
+        менеджеру с комментарием (`confirmed = false`; комментарий обязателен). До
+        подтверждения клиент не может принять условия отмены.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmCostsPayload'
+      responses:
+        '200':
+          description: Решение по сумме затрат принято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/approve:
+    post:
+      operationId: approveCancellation
+      tags: [Cancellation]
+      summary: Утвердить отмену по инициативе оператора (T21, T21b)
+      description: |
+        Руководитель B2B действует по-разному в зависимости от решения.
+        Исходный запрос T20 всегда создаётся по соглашению (`method = AGREEMENT`) —
+        и для инициативы клиента, и для инициативы оператора.
+
+        **Обычное утверждение (T21).** Руководитель подтверждает условия отмены, но
+        заявка остаётся в `CANCEL_REQUESTED`: в `CANCELLED` её переводит клиент через
+        `POST /internal/v1/cancellation-requests/{cancellationId}/accept`, когда
+        принимает условия. До этого момента этапы и SLA остаются на паузе
+        `CANCEL_REVIEW`.
+
+        **T21b.** `method = UNILATERAL` — не условие вызова этой операции, а результат
+        решения руководителя. Если причина — `CONNECTION_IMPOSSIBLE`, а клиент отклонил
+        условия или не ответил до истечения контрольного срока `CANCEL_RESPONSE`,
+        руководитель переводит запрос в одностороннюю отмену, а заявку — в `CANCELLED`
+        без компенсации: `costAmount` не выставляется, открытые этапы отменяются,
+        таймеры останавливаются.
+
+        Для инициативы клиента операция не применяется: условия принимает клиент
+        (`accept`). Устаревшая версия запроса — `409 VERSION_CONFLICT`, уже
+        разрешённый запрос — `409 ILLEGAL_TRANSITION`.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Отмена утверждена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/accept:
+    post:
+      operationId: acceptCancellation
+      tags: [Cancellation]
+      summary: Принять условия отмены (T21)
+      description: |
+        Клиент принимает условия отмены по соглашению; для инициативы оператора —
+        после утверждения руководителем B2B. Заявка переходит в `CANCELLED`, открытые
+        этапы отменяются, таймеры останавливаются, итог уходит всем участникам.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Условия отмены приняты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/reject:
+    post:
+      operationId: rejectCancellation
+      tags: [Cancellation]
+      summary: Отклонить запрос на отмену или условия (T22)
+      description: |
+        Клиент отклоняет условия оператора, руководитель B2B отклоняет инициативу
+        оператора; комментарий обязателен. Если причина оператора объективная
+        (`CONNECTION_IMPOSSIBLE`), отказ клиента не возвращает заявку: она остаётся
+        в `CANCEL_REQUESTED`, решение принимает руководитель B2B (T21b или T22).
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRejectPayload'
+      responses:
+        '200':
+          description: Запрос на отмену отклонён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/cancellation-requests/{cancellationId}/withdraw:
+    post:
+      operationId: withdrawCancellation
+      tags: [Cancellation]
+      summary: Отозвать запрос на отмену (T22, EC-21)
+      description: |
+        Клиент или менеджер отзывает свой запрос на отмену. Заявка возвращается
+        в `previousStatus`, этапы и SLA возобновляются, время запроса учитывается
+        как пауза.
+      parameters:
+        - $ref: '#/components/parameters/CancellationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedAction'
+      responses:
+        '200':
+          description: Запрос на отмену отозван
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationRequestView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/dictionaries/{name}:
+    get:
+      operationId: getDictionary
+      tags: [Dictionaries]
+      summary: Справочник причин и типов
+      description: |
+        Активные значения справочника `name`. `rejection-reasons` можно сузить по шагу
+        `stageType` (тип этапа ТВ или согласования): интерфейс показывает причины своего
+        шага и всегда добавляет `OTHER` (docs/system/api-contract.md, 6.11;
+        docs/business/business-process.md, 11.6). Неизвестный справочник —
+        `404 NOT_FOUND`.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/DictionaryName'
+        - name: stageType
+          in: query
+          required: false
+          description: 'Шаг для `rejection-reasons`: `TECH_CHECK` или тип согласования'
+          schema:
+            $ref: '#/components/schemas/StageType'
+      responses:
+        '200':
+          description: Значения справочника
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictionaryView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/archive/requests:
+    get:
+      operationId: listArchivedRequests
+      tags: [Archive]
+      summary: Поиск заявок в архиве
+      description: |
+        Те же заявки, что и в `GET /internal/v1/requests`, включая закрытые
+        (`CLOSED`, `REJECTED`, `CANCELLED`). Отдельного хранилища нет: архив —
+        вычисляемый признак, поэтому доступ, фильтрация и сортировка идут по тем же
+        правилам. Клиент видит только заявки своей компании, администратор — `403`.
+        Фильтры и сортировка — только по колонкам; фильтр по полю JSONB возвращает
+        `422 VALIDATION_FAILED` (docs/system/archive-export.md, 4).
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Статусы заявок; повторяющийся параметр
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/RequestStatus'
+        - name: closedFrom
+          in: query
+          required: false
+          description: Дата закрытия, включительно
+          schema:
+            type: string
+            format: date
+        - name: closedTo
+          in: query
+          required: false
+          description: Дата закрытия, включительно
+          schema:
+            type: string
+            format: date
+        - name: segment
+          in: query
+          required: false
+          description: 'Сегменты; повторяющийся параметр. Допустимые значения: `SMB`, `LARGE`, `STRATEGIC`'
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Страница заявок архива
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestPage'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/exports/requests:
+    post:
+      operationId: createRequestsExport
+      tags: [Archive]
+      summary: Запустить асинхронный экспорт заявок
+      description: |
+        `CSV` — список заявок по фильтрам архива, `PDF` — досье одной заявки
+        (`requestId`). Экспорт не выходит за права пользователя: клиент выгружает
+        только свою компанию, в его выгрузке нет исполнителей, внутренних
+        комментариев и SLA. Лимит — 50 000 строк (`422 EXPORT_TOO_LARGE`);
+        второй одновременный экспорт пользователя — `429 EXPORT_IN_PROGRESS`
+        (docs/system/archive-export.md, 6). Готовность приходит событием
+        `EXPORT_READY`; файл результата живёт 24 часа.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequestPayload'
+      responses:
+        '202':
+          description: Задание экспорта принято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /internal/v1/exports/{exportId}:
+    get:
+      operationId: getRequestsExport
+      tags: [Archive]
+      summary: Статус и ссылка на результат экспорта
+      description: |
+        Доступно автору экспорта; чужое задание — `404`. `downloadUrl` заполняется
+        только в статусе `READY`, ссылка одноразовая, привязана к пользователю и
+        действует 24 часа. Каждый запрос экспорта и скачивание пишутся в `audit_log`.
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Задание экспорта
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobView'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     internalToken:
@@ -1407,6 +2356,13 @@ components:
         format: uuid
     CompanyId:
       name: companyId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CancellationId:
+      name: cancellationId
       in: path
       required: true
       schema:
@@ -1474,6 +2430,14 @@ components:
             $ref: '#/components/schemas/Problem'
     ConflictError:
       description: Конфликт версии, статуса или повторного действия
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequestsError:
+      description: |
+        Превышен лимит: у пользователя уже выполняется экспорт (`EXPORT_IN_PROGRESS`)
+        или сработал ограничитель Nginx.
       content:
         application/problem+json:
           schema:
@@ -1782,6 +2746,12 @@ components:
         number:
           type: string
           example: REQ-2026-000001
+        parentRequestId:
+          type: string
+          format: uuid
+          description: |
+            Исходная отклонённая заявка, если эта создана через
+            `POST /internal/v1/requests/{requestId}/from-rejected` (EC-01).
         companyId:
           type: string
           format: uuid
@@ -2040,6 +3010,11 @@ components:
       enum: [STANDARD, EXTENDED, LARGE]
     StageView:
       type: object
+      description: |
+        Этап в карточке заявки, очередях и «Моих задачах». `requestNumber`,
+        `companyName`, `address` и `sla` заполняются для очередей и «Моих задач»;
+        сводка `sla` отдаётся только ролям оператора. Клиенту также не возвращаются
+        исполнители, `queueRole` и `requiredByRules`.
       required: [id, requestId, type, status, version, createdAt]
       properties:
         id:
@@ -2051,6 +3026,14 @@ components:
         requestNumber:
           type: string
           example: REQ-2026-000123
+        companyName:
+          type: string
+          description: Название компании заявки; нужно очередям и «Моим задачам»
+        address:
+          type: string
+          description: Адрес подключения из заявки; нужен очередям и «Моим задачам»
+        sla:
+          $ref: '#/components/schemas/StageSlaSummary'
         type:
           $ref: '#/components/schemas/StageType'
         status:
@@ -2515,3 +3498,617 @@ components:
         payload:
           type: object
           additionalProperties: true
+    UpdateRequestDataPayload:
+      type: object
+      description: |
+        Правка данных в доработке (T09, T09b, T12). Для каждого поля действуют три
+        правила: поле пропущено — прежнее значение сохраняется; поле передано —
+        значение обновляется; передан явный `null` — поле очищается. Очистка `null`
+        разрешена только для `desiredDate`, `contactName`, `contactPhone` и
+        `discountPercent`; для остальных полей `null` — `422 VALIDATION_FAILED`.
+        При повторной отправке (T10) `desiredDate`, `contactName` и `contactPhone`
+        должны быть заполнены.
+
+        Поля предложения услуги влияют на пересборку маршрута
+        (docs/system/routing-rules.md, 3 и 7); пересборка выполняется повторной
+        отправкой, а не этим запросом. `discountPercent: null` допустим при переходе
+        на `tariffType = STANDARD`: скидка очищается, и правило R-03 больше не
+        добавляет финансовое согласование.
+      required: [version]
+      properties:
+        address:
+          type: string
+          maxLength: 500
+        requestedSpeedMbps:
+          type: integer
+          minimum: 1
+          maximum: 100000
+        desiredDate:
+          type: string
+          format: date
+          nullable: true
+          description: Явный `null` очищает дату; при T10 дата должна быть заполнена
+        contactName:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: Явный `null` очищает имя; при T10 имя должно быть заполнено
+        contactPhone:
+          type: string
+          maxLength: 32
+          nullable: true
+          description: Явный `null` очищает телефон; при T10 телефон должен быть заполнен
+        contractPreference:
+          $ref: '#/components/schemas/ContractType'
+        clientComment:
+          type: string
+          maxLength: 4000
+        tariffType:
+          $ref: '#/components/schemas/TariffType'
+        discountPercent:
+          type: string
+          nullable: true
+          pattern: '^[0-9]{1,3}\.[0-9]{2}$'
+          example: '10.00'
+          description: |
+            Проценты строкой с двумя знаками. Обязательна при `tariffType = INDIVIDUAL`;
+            диапазон 0.00–100.00 и обязательность проверяет ядро. Явный `null`
+            очищает скидку (переход на `STANDARD`); пропущенное поле сохраняет прежнюю.
+        speedMbps:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: Скорость в предложении услуги; если не передана, значение не меняется
+        contractType:
+          $ref: '#/components/schemas/ContractType'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ApprovalDecision:
+      type: string
+      description: Решение согласующего по этапу.
+      enum: [APPROVE, RETURN, REJECT]
+    StageDecisionPayload:
+      type: object
+      description: |
+        Тело решения согласующего (docs/system/api-contract.md, 6.4 и 10.8).
+        `comment` обязателен для `RETURN` и `REJECT`; `reasonCode` — для `REJECT`
+        и берётся из `rejection_reason` для шага согласования.
+      required: [decision, version]
+      properties:
+        decision:
+          $ref: '#/components/schemas/ApprovalDecision'
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Обязателен при `RETURN` и `REJECT`
+        reasonCode:
+          type: string
+          minLength: 1
+          description: Код из справочника `rejection_reason` для шага согласования; обязателен при `REJECT`
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    StageReturnPayload:
+      type: object
+      description: Возврат заявки с проверки ТВ (T09b); комментарий обязателен.
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Что исправить в данных заявки
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    RevisionReason:
+      type: string
+      description: Причина появления ревизии (docs/system/domain-model.md, 4.2).
+      enum: [SUBMIT, REWORK, RECALC, RECHECK]
+    RevisionChange:
+      type: object
+      description: Одно изменившееся поле между соседними ревизиями.
+      required: [field]
+      properties:
+        field:
+          type: string
+          example: requestedSpeedMbps
+        previousValue:
+          type: string
+          description: Значение в предыдущей ревизии; пусто, если поле появилось
+        newValue:
+          type: string
+          description: Значение в текущей ревизии; пусто, если поле удалено
+    RequestRevisionView:
+      type: object
+      required: [id, revisionNo, reason, createdAt, changes]
+      properties:
+        id:
+          type: string
+          format: uuid
+        revisionNo:
+          type: integer
+          minimum: 1
+        reason:
+          $ref: '#/components/schemas/RevisionReason'
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        params:
+          type: object
+          additionalProperties: true
+          description: Снимок параметров заявки на момент ревизии
+        changes:
+          type: array
+          description: Отличия от предыдущей ревизии; у первой ревизии — от пустого снимка
+          items:
+            $ref: '#/components/schemas/RevisionChange'
+    RequestRevisionPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestRevisionView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    RouteStageView:
+      type: object
+      description: |
+        Этап плана маршрута. `stageId` и `status` пусты, пока этап не создан
+        (например, управленческое согласование второй волны до завершения первой).
+        `requiredByRules` — служебное поле: оно заполняется для ролей оператора и
+        отсутствует в клиентском ответе, поэтому необязательно.
+      required: [type, wave]
+      properties:
+        stageId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/StageType'
+        queueRole:
+          $ref: '#/components/schemas/Role'
+          description: Не отдаётся клиенту
+        status:
+          $ref: '#/components/schemas/StageStatus'
+        wave:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: Волна согласований; 0 — этап вне волн согласований
+        requiredByRules:
+          type: array
+          description: |
+            ID правил маршрутизации, из-за которых появился этап; не отдаётся клиенту
+            и в этом случае поле отсутствует.
+          items:
+            type: string
+            example: R-01
+    RouteView:
+      type: object
+      required: [requestId, routeVersion, stages]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        routeVersion:
+          type: integer
+        requestClass:
+          $ref: '#/components/schemas/RequestClass'
+        construction:
+          type: boolean
+          description: В маршруте есть этап `CONSTRUCTION` (ТВ «со стройкой»)
+        stages:
+          type: array
+          description: Этапы плана в порядке прохождения
+          items:
+            $ref: '#/components/schemas/RouteStageView'
+    StageSlaStatus:
+      type: string
+      description: |
+        Краткий статус срока этапа: `RUNNING` — идёт, `PAUSED` — на паузе,
+        `BREACHED` — норматив исчерпан, `STOPPED` — этап закрыт.
+      enum: [RUNNING, PAUSED, BREACHED, STOPPED]
+    StageSlaSummary:
+      type: object
+      description: |
+        Краткая сводка срока этапа для очередей и «Моих задач»; отдаётся только ролям
+        оператора. Полный SLA с журналом пауз — `GET /internal/v1/requests/{requestId}/sla`.
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/StageSlaStatus'
+        dueAt:
+          type: string
+          format: date-time
+          description: Момент нарушения при условии, что пауз больше не будет
+        remainingMinutes:
+          type: integer
+          description: |
+            Остаток в минутах по календарю конкретного таймера: рабочие минуты для
+            этапов SLA, календарные минуты для стройки (`CONSTRUCTION`). Отрицательный
+            — просрочка.
+        overdue:
+          type: boolean
+          description: Норматив уже исчерпан
+    StageProblem:
+      type: string
+      description: |
+        Проблема на объекте: `NO_ACCESS` — нет доступа (EC-11, ручная пауза
+        координатора), `CONNECTION_IMPOSSIBLE` — подключение невозможно по факту
+        (EC-22, повторная ТВ).
+      enum: [NO_ACCESS, CONNECTION_IMPOSSIBLE]
+    StageProblemPayload:
+      type: object
+      description: Сообщение инженера о проблеме на объекте (T15, EC-11, EC-22).
+      required: [problem, comment, version]
+      properties:
+        problem:
+          $ref: '#/components/schemas/StageProblem'
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Что произошло на объекте
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ContractChangeRequestPayload:
+      type: object
+      description: Просьба клиента изменить условия договора (T12).
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Что именно просит изменить клиент
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    DefectClaimPayload:
+      type: object
+      description: Мотивированная претензия клиента до приёмки (T17).
+      required: [reason, version]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: В чём состоит замечание к услуге
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationInitiator:
+      type: string
+      description: Сторона, инициировавшая отмену.
+      enum: [CLIENT, OPERATOR]
+    CancellationMethod:
+      type: string
+      description: Способ отмены (docs/system/business-process.md, 11.3).
+      enum: [UNILATERAL, AGREEMENT]
+    CancellationStatus:
+      type: string
+      description: Статус запроса на отмену (docs/system/domain-model.md, 4.5).
+      enum: [OPEN, ACCEPTED, WITHDRAWN, REJECTED, EXPIRED]
+    CancellationReasonPayload:
+      type: object
+      description: |
+        Причина односторонней отмены (T19) или запроса на отмену (T20). Код берётся
+        из `cancel_reason` для стороны инициатора; если у причины `requires_comment`,
+        комментарий обязателен. `version` — версия заявки.
+      required: [reasonCode, version]
+      properties:
+        reasonCode:
+          type: string
+          minLength: 1
+          description: Код из справочника `cancel_reason`; неизвестный код — `422 VALIDATION_FAILED`
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationCostItem:
+      type: object
+      required: [description, amount]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        amount:
+          type: string
+          pattern: '^[0-9]+\.[0-9]{2}$'
+          example: '45000.00'
+    CancellationCostsPayload:
+      type: object
+      description: |
+        Сумма фактических затрат к компенсации с расшифровкой (уровень 2, инициатива
+        клиента). `version` — версия запроса на отмену.
+      allOf:
+        - $ref: '#/components/schemas/VersionedAction'
+        - type: object
+          required: [amount, breakdown]
+          properties:
+            amount:
+              type: string
+              pattern: '^[0-9]+\.[0-9]{2}$'
+              example: '45000.00'
+            breakdown:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/CancellationCostItem'
+            comment:
+              type: string
+              minLength: 1
+              maxLength: 4000
+    ConfirmCostsPayload:
+      type: object
+      description: |
+        Решение финансового контролёра по сумме затрат. При `confirmed = false`
+        комментарий обязателен: в нём причина возврата суммы менеджеру. Это
+        бизнес-правило ядра: OpenAPI 3.0 не выражает условную обязательность без
+        `oneOf`, поэтому правило зафиксировано здесь и в контрактном тесте.
+      required: [confirmed, version]
+      properties:
+        confirmed:
+          type: boolean
+          description: '`true` — сумма подтверждена; `false` — возвращена менеджеру'
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Обязателен при `confirmed = false`
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationRejectPayload:
+      type: object
+      required: [comment, version]
+      properties:
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Причина отклонения; обязательна
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    CancellationRequestView:
+      type: object
+      required:
+        - id
+        - requestId
+        - requestStatus
+        - initiator
+        - method
+        - levelAtRequest
+        - status
+        - reasonCode
+        - requestedAt
+        - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        requestStatus:
+          $ref: '#/components/schemas/RequestStatus'
+        initiator:
+          $ref: '#/components/schemas/CancellationInitiator'
+        method:
+          $ref: '#/components/schemas/CancellationMethod'
+        levelAtRequest:
+          type: integer
+          minimum: 0
+          maximum: 2
+          description: Уровень обязательств на момент запроса
+        status:
+          $ref: '#/components/schemas/CancellationStatus'
+        reasonCode:
+          type: string
+        reasonComment:
+          type: string
+        previousStatus:
+          $ref: '#/components/schemas/RequestStatus'
+          description: Куда вернуться при отзыве, отклонении или истечении (T22)
+        costAmount:
+          type: string
+          example: '45000.00'
+          description: Сумма к компенсации; только уровень 2 по инициативе клиента
+        costBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/CancellationCostItem'
+        costFixedBy:
+          type: string
+          format: uuid
+          description: Менеджер, зафиксировавший сумму
+        costConfirmedBy:
+          type: string
+          format: uuid
+          description: Финансовый контролёр, подтвердивший сумму
+        approvedBy:
+          type: string
+          format: uuid
+          description: Руководитель B2B, утвердивший отмену
+        requestedBy:
+          type: string
+          format: uuid
+        requestedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+        termsReady:
+          type: boolean
+          description: Условия отмены готовы к принятию клиентом
+        version:
+          type: integer
+          format: int64
+    CancellationRequestPage:
+      type: object
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CancellationRequestView'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    DictionaryName:
+      type: string
+      description: |
+        Имя справочника: причины паузы, причины отмены, причины отклонения, типы
+        договоров, виды вложений (docs/system/api-contract.md, 6.11).
+      enum:
+        - pause-reasons
+        - cancel-reasons
+        - rejection-reasons
+        - contract-types
+        - attachment-kinds
+    DictionaryParty:
+      type: string
+      description: Сторона, которой доступна причина отмены.
+      enum: [CLIENT, OPERATOR]
+    DictionaryItem:
+      type: object
+      required: [code, title]
+      properties:
+        code:
+          type: string
+          example: OTHER
+        title:
+          type: string
+          example: Другая причина
+        stageType:
+          $ref: '#/components/schemas/StageType'
+          description: Шаг, к которому относится причина отклонения
+        party:
+          $ref: '#/components/schemas/DictionaryParty'
+        requiresComment:
+          type: boolean
+          description: Комментарий обязателен вместе с этим кодом
+        automatic:
+          type: boolean
+          description: Причина паузы ставится системой, а не вручную
+    DictionaryView:
+      type: object
+      required: [name, items]
+      properties:
+        name:
+          $ref: '#/components/schemas/DictionaryName'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictionaryItem'
+    ExportFormat:
+      type: string
+      description: |
+        Формат выгрузки: `CSV` — список заявок по фильтрам, `PDF` — досье одной
+        заявки (docs/system/archive-export.md, 6).
+      enum: [CSV, PDF]
+    ExportStatus:
+      type: string
+      description: |
+        Статус задания экспорта: `QUEUED` — принято, `RUNNING` — выполняется,
+        `READY` — готово, `FAILED` — ошибка, `EXPIRED` — файл удалён по сроку.
+      enum: [QUEUED, RUNNING, READY, FAILED, EXPIRED]
+    ExportFilters:
+      type: object
+      additionalProperties: true
+      description: |
+        Фильтры CSV-выгрузки; имена и правила — docs/system/archive-export.md, 4.
+        Допустимы только колонки: фильтр по полю JSONB возвращает
+        `422 VALIDATION_FAILED`. Набор совпадает с фильтрами архива.
+      properties:
+        q:
+          type: string
+          description: Полнотекстовый поиск по номеру, адресу и названию компании
+        companyId:
+          type: string
+          format: uuid
+        status:
+          type: array
+          description: Статусы заявок; повторяющийся параметр
+          items:
+            $ref: '#/components/schemas/RequestStatus'
+        segment:
+          type: array
+          description: 'Сегменты; повторяющийся параметр. Допустимые значения: `SMB`, `LARGE`, `STRATEGIC`'
+          items:
+            type: string
+        closedFrom:
+          type: string
+          format: date
+        closedTo:
+          type: string
+          format: date
+    ExportRequestPayload:
+      type: object
+      description: |
+        Тело запуска экспорта. Для `PDF` обязателен `requestId`; для `CSV`
+        используется `filters` (без него выгружаются все доступные заявки).
+      required: [format]
+      properties:
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        requestId:
+          type: string
+          format: uuid
+          description: Заявка для `PDF`-досье; для `CSV` не передаётся
+        filters:
+          $ref: '#/components/schemas/ExportFilters'
+    ExportJobView:
+      type: object
+      required: [id, format, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        status:
+          $ref: '#/components/schemas/ExportStatus'
+        rowCount:
+          type: integer
+          description: Число строк в готовой выгрузке; для `PDF` равно 1
+        downloadUrl:
+          type: string
+          format: uri
+          description: Одноразовая ссылка на файл; только в статусе `READY`
+        expiresAt:
+          type: string
+          format: date-time
+          description: Момент удаления файла результата
+        errorCode:
+          type: string
+          example: EXPORT_TOO_LARGE
+          description: Машинный код ошибки при `status = FAILED`
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
